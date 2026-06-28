@@ -1,0 +1,69 @@
+{
+  "name": "Conejito",
+  "backend": "sprite",
+  "scale": 2.0,
+  "defaultState": "idle",
+  "animations": {
+    "idle": {
+      "source": "sprites/idle.png",
+      "frameCount": 6,
+      "frameWidth": 128,
+      "frameHeight": 128,
+      "fps": 8
+    },
+    "typing": {
+      "source": "sprites/typing.png",
+      "frameCount": 6,
+      "frameWidth": 128,
+      "frameHeight": 128,
+      "fps": 10
+    },
+    "gaming": {
+      "source": "sprites/gaming.png",
+      "frameCount": 6,
+      "frameWidth": 128,
+      "frameHeight": 128,
+      "fps": 8
+    },
+    "browsing": {
+      "source": "sprites/browsing.png",
+      "frameCount": 6,
+      "frameWidth": 128,
+      "frameHeight": 128,
+      "fps": 6
+    },
+    "talking": {
+      "source": "sprites/talking.png",
+      "frameCount": 6,
+      "frameWidth": 128,
+      "frameHeight": 128,
+      "fps": 12
+    },
+    "sleeping": {
+      "source": "sprites/sleeping.png",
+      "frameCount": 6,
+      "frameWidth": 128,
+      "frameHeight": 128,
+      "fps": 4
+    },
+    "watching": {
+      "source": "sprites/watching.png",
+      "frameCount": 6,
+      "frameWidth": 128,
+      "frameHeight": 128,
+      "fps": 6
+    },
+    "music": {
+      "source": "sprites/music.png",
+      "frameCount": 6,
+      "frameWidth": 128,
+      "frameHeight": 128,
+      "fps": 8
+    }
+  },
+  "voice": {
+    "tts": "piper",
+    "voice": "es_ES-sharvard-medium"
+  },
+  "persona": "Eres Conejito, una criatura virtual juguetona y curiosa que vive en la pantalla y acompana a tu humano. Hablas espanol dominicano, calida, breve (1-2 frases). Si algo no se entiende, pregunta con carino en vez de inventar."
+}

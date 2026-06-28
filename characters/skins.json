@@ -38,5 +38,69 @@
   {
     "id": "menta",
     "label": "Menta — fresco"
+  },
+  {
+    "id": "cat_orange",
+    "label": "Gato — Naranja atigrado"
+  },
+  {
+    "id": "cat_gray",
+    "label": "Gato — Gris plateado"
+  },
+  {
+    "id": "fox_classic",
+    "label": "Zorro — Zorro Rojo"
+  },
+  {
+    "id": "fox_arctic",
+    "label": "Zorro — Zorro Ártico"
+  },
+  {
+    "id": "slime_forest",
+    "label": "Slime — Forest Slime"
+  },
+  {
+    "id": "slime_ocean",
+    "label": "Slime — Ocean Slime"
+  },
+  {
+    "id": "bunny_white",
+    "label": "Conejito — Conejito Blanco"
+  },
+  {
+    "id": "bunny_caramel",
+    "label": "Conejito — Conejito Caramelo"
+  },
+  {
+    "id": "bear_caramel",
+    "label": "Osito — Osito Caramelo"
+  },
+  {
+    "id": "bear_panda",
+    "label": "Osito — Osito Panda"
+  },
+  {
+    "id": "chick_amarillo",
+    "label": "Pollito — Pollito Clásico"
+  },
+  {
+    "id": "chick_pastel",
+    "label": "Pollito — Pollito Pascua"
+  },
+  {
+    "id": "ghost_white",
+    "label": "Fantasma — Fantasma Blanco"
+  },
+  {
+    "id": "ghost_lavender",
+    "label": "Fantasma — Fantasma Lavanda"
+  },
+  {
+    "id": "axolotl_leucistic",
+    "label": "Ajolote — Leucistico (Rosa clasico)"
+  },
+  {
+    "id": "axolotl_golden",
+    "label": "Ajolote — Dorado Albino"
   }
 ]
