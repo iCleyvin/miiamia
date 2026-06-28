@@ -1,0 +1,42 @@
+[
+  {
+    "id": "kira",
+    "label": "Kira — violeta"
+  },
+  {
+    "id": "ember",
+    "label": "Ember — fuego"
+  },
+  {
+    "id": "aqua",
+    "label": "Aqua — océano"
+  },
+  {
+    "id": "verde",
+    "label": "Verde — bosque"
+  },
+  {
+    "id": "dorada",
+    "label": "Dorada — oro"
+  },
+  {
+    "id": "sombra",
+    "label": "Sombra — noche"
+  },
+  {
+    "id": "rosa",
+    "label": "Rosa — pétalo"
+  },
+  {
+    "id": "nieve",
+    "label": "Nieve — hielo"
+  },
+  {
+    "id": "lava",
+    "label": "Lava — magma"
+  },
+  {
+    "id": "menta",
+    "label": "Menta — fresco"
+  }
+]

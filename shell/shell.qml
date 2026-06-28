@@ -10,7 +10,8 @@ import Quickshell.Io
 ShellRoot {
     id: app
 
-    property string activeCharacter: "kira"
+    readonly property string activeCharacter:
+        (settings.active_character && settings.active_character.length > 0) ? settings.active_character : "kira"
 
     // Quickshell.shellDir = ruta REAL del dir que contiene shell.qml (.../miiamia/shell).
     // (Qt.resolvedUrl resuelve contra el FS virtual interno qrc:/, no sirve para archivos.)
@@ -25,18 +26,23 @@ ShellRoot {
     // IO nativo de Quickshell (XMLHttpRequest sobre archivos locales esta deshabilitado).
     FileView {
         id: manifestFile
-        path: app.manifestPath
-        blockLoading: true   // lectura sincrona: el manifest esta listo al construir la mascota
+        blockLoading: true   // lectura sincrona; la ruta la fija loadCharacter() (cambio de skin en vivo)
     }
 
-    readonly property var manifest: {
-        try {
-            return JSON.parse(manifestFile.text());
-        } catch (e) {
-            console.error("miiamia: no pude cargar el manifest", manifestPath, "-", e);
-            // Fallback minimo para no romper el arbol; la mascota simplemente no se ve.
-            return { animations: {}, scale: 2.0, defaultState: "idle" };
-        }
+    // Manifest del personaje activo. Se recarga EN VIVO al cambiar de skin (no es binding).
+    property var manifest: ({ animations: {}, scale: 2.0, defaultState: "idle" })
+    function loadCharacter() {
+        manifestFile.path = app.manifestPath;   // fuerza la recarga sincrona del skin activo
+        try { app.manifest = JSON.parse(manifestFile.text()); }
+        catch (e) { console.error("miiamia: manifest inválido", manifestPath, "-", e); }
+    }
+    property bool _ready: false
+    onActiveCharacterChanged: if (_ready) loadCharacter()   // ignora cambios transitorios de init
+
+    // Índice de skins disponibles (characters/skins.json) para el menú.
+    FileView { id: skinsFile; path: projectRoot + "/characters/skins.json"; blockLoading: true }
+    readonly property var skinsIndex: {
+        try { return JSON.parse(skinsFile.text()); } catch (e) { return [{ id: "kira", label: "Kira" }]; }
     }
 
     // --- Ajustes del usuario (settings.json), editables desde el menú de configuración (M5) ---
@@ -49,15 +55,15 @@ ShellRoot {
     function _loadSettings() {
         var s = {};
         try { s = JSON.parse(settingsFile.text()); } catch (e) { s = {}; }
-        if (s.scale === undefined) s.scale = (manifest.scale !== undefined ? manifest.scale : 2.0);
+        if (s.scale === undefined) s.scale = 2.0;
         if (!s.voice) s.voice = {};
-        if (!s.voice.tts_voice) s.voice.tts_voice =
-            (manifest.voice && manifest.voice.voice) ? manifest.voice.voice : "es_ES-sharvard-medium";
+        if (!s.voice.tts_voice) s.voice.tts_voice = "es_ES-sharvard-medium";
         if (!s.voice.stt_model) s.voice.stt_model = "ggml-base";
         if (!s.voice.language) s.voice.language = "es";
         if (s.monitor === undefined) s.monitor = "";
         if (s.persona === undefined) s.persona = "";
         if (s.custom_model === undefined) s.custom_model = "";
+        if (s.active_character === undefined) s.active_character = "kira";
         return s;
     }
     // Persona activa: la del menú si el usuario la definió; si no, la del personaje.
@@ -130,6 +136,8 @@ ShellRoot {
     SettingsWindow {
         id: settingsWindow
         scaleValue: app.settings.scale
+        character: app.activeCharacter
+        skins: app.skinsIndex
         voice: app.settings.voice.tts_voice
         stt: app.settings.voice.stt_model
         language: app.settings.voice.language
@@ -139,6 +147,7 @@ ShellRoot {
         aiInfo: "Backend: " + ai.backend + "  ·  modelo: "
                 + (ai.effectiveModelPath ? ai.effectiveModelPath.split("/").pop() : "—") + "  ·  " + ai.status
         onSetScale: function (v) { app.applySetting("scale", v) }
+        onSetCharacter: function (v) { app.applySetting("active_character", v) }
         onSetVoice: function (v) { app.applySetting("voice.tts_voice", v) }
         onSetStt: function (v) { app.applySetting("voice.stt_model", v) }
         onSetLanguage: function (v) { app.applySetting("voice.language", v) }
@@ -162,6 +171,10 @@ ShellRoot {
         onVoicePttStop: voice.pttStop()
     }
 
-    Component.onCompleted: console.log("miiamia: personaje activo =", activeCharacter,
-        "| manifest:", (manifest.name !== undefined ? manifest.name : "FALLO"))
+    Component.onCompleted: {
+        _ready = true;
+        loadCharacter();
+        console.log("miiamia: personaje activo =", activeCharacter,
+            "| manifest:", (manifest.name !== undefined ? manifest.name : "FALLO"));
+    }
 }

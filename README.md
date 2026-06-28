@@ -59,12 +59,16 @@ Control del servicio: `systemctl --user restart|stop miiamia` · logs: `journalc
 El modelo de IA y la voz se **cargan bajo demanda** y se **descargan solos** al estar inactivos o al jugar,
 para no consumir recursos de más. Detalle técnico en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## Personajes
+## Skins / personajes
 
-El personaje por defecto es **Kira** (una dragona), con sprites placeholder generados por
-`tools/make_placeholder_sprites.py`. Para crear el tuyo, copia `characters/kira/` a
-`characters/<tu-personaje>/`, renombra y edita el `.json` (animaciones, voz, personalidad),
-reemplaza los sprites por tu arte y apunta `active_character` en `config/miiamia.toml`.
+Vienen **10 skins** incluidas (Kira violeta, Ember fuego, Aqua océano, Verde, Dorada, Sombra,
+Rosa, Nieve, Lava, Menta) — **elígelas desde el menú ⚙ → Aspecto → Skin**, con cambio en vivo.
+Son arte procedural de relleno generado por `tools/make_skins.py` (regenéralas con
+`python tools/make_skins.py`).
+
+Para crear el tuyo: copia `characters/kira/` a `characters/<tu-personaje>/`, renombra y edita el
+`.json` (animaciones, voz, personalidad), reemplaza los sprites por tu arte (sprite sheet de
+6×128px por estado) y añádelo a `characters/skins.json`. Aparecerá en el selector.
 
 ## Licencia
 

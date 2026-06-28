@@ -80,8 +80,8 @@ command -v whisper-server >/dev/null || warn \
 
 # --- 4. Sprites placeholder ---
 if [[ ! -f characters/kira/sprites/idle.png ]]; then
-  command -v python >/dev/null && python tools/make_placeholder_sprites.py 2>/dev/null || \
-    python3 tools/make_placeholder_sprites.py 2>/dev/null || warn "No pude generar sprites (falta python-pillow)."
+  { command -v python >/dev/null && python tools/make_skins.py; } 2>/dev/null || \
+    python3 tools/make_skins.py 2>/dev/null || warn "No pude generar skins (falta python-pillow); ya vienen en el repo."
 fi
 
 # --- 5. Modelo de IA (según tu hardware) ---

@@ -15,6 +15,8 @@ PanelWindow {
 
     // --- Valores actuales (los pone shell.qml) ---
     property real scaleValue: 2.0
+    property string character: "kira"
+    property var skins: []
     property string voice: "es_ES-sharvard-medium"
     property string stt: "ggml-base"
     property string language: "es"
@@ -27,6 +29,7 @@ PanelWindow {
 
     // --- Señales que aplica shell.qml ---
     signal setScale(real v)
+    signal setCharacter(string v)
     signal setVoice(string v)
     signal setStt(string v)
     signal setLanguage(string v)
@@ -146,6 +149,16 @@ PanelWindow {
 
                 // ---- Aspecto ----
                 Text { text: "ASPECTO"; color: "#a78cff"; font.pixelSize: 12; font.bold: true }
+                Column {
+                    width: parent.width; spacing: 6
+                    Text { text: "Skin / personaje (" + win.skins.length + " disponibles)"; color: "#cfc7e8"; font.pixelSize: 13 }
+                    ComboBox {
+                        width: parent.width
+                        model: win.skins; textRole: "label"
+                        currentIndex: win._idx(win.skins, win.character)
+                        onActivated: win.setCharacter(win.skins[currentIndex].id)
+                    }
+                }
                 Column {
                     width: parent.width; spacing: 4
                     Text { text: "Tamaño de la mascota: " + win.scaleValue.toFixed(1) + "×"; color: "#cfc7e8"; font.pixelSize: 13 }
