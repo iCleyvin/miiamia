@@ -1,0 +1,208 @@
+// ChatBubble.qml — ventana de chat con la mascota (M3).
+//
+// Ventana SEPARADA del overlay (bug Hyprland #14136): aqui keyboardFocus=OnDemand para escribir;
+// el overlay de la mascota se queda en None.
+//
+// AGNOSTICO DEL BACKEND: habla el endpoint estandar OpenAI `/v1/chat/completions` (SSE streaming).
+// Funciona con el motor EMBEBIDO (llama.cpp, sin depender de nada) o con Ollama si existe.
+// La persona se manda como mensaje 'system' -> no depende de Modelfiles ni de un motor concreto.
+import QtQuick
+import QtQuick.Controls
+import Quickshell
+import Quickshell.Wayland
+
+PanelWindow {
+    id: chat
+
+    property string aiUrl: "http://127.0.0.1:8080"   // servidor local OpenAI-compat (embebido u Ollama)
+    property string model: "miiamia"
+    property string persona: ""
+    property string charName: "Kira"
+    property bool open: false
+    property bool streaming: false    // <- el avatar usa esto para animar 'talking'
+    property bool backendReady: true  // <- AIBackend pone false mientras enciende el motor
+    signal sent()                     // emitido al mandar un mensaje (shell.qml -> ensureRunning)
+    signal openSettings()             // el ⚙ abre el menú de configuración
+
+    visible: open
+    onOpenChanged: if (open) input.forceActiveFocus()
+
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.namespace: "miiamia-chat"
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+    WlrLayershell.exclusionMode: ExclusionMode.Ignore
+
+    anchors { bottom: true; right: true }
+    margins { bottom: 300; right: 40 }
+    implicitWidth: 380
+    implicitHeight: 440
+    color: "transparent"
+
+    ListModel { id: msgs }
+
+    // --- Llamada al modelo con streaming (OpenAI /v1, Server-Sent Events) ---
+    function send(text) {
+        if (!text || chat.streaming || !chat.backendReady) return;
+        chat.sent();
+        msgs.append({ "role": "user", "text": text });
+
+        // Construye los mensajes para la API: persona (system) + conversacion.
+        var apiMsgs = [];
+        if (chat.persona) apiMsgs.push({ "role": "system", "content": chat.persona });
+        for (var i = 0; i < msgs.count; i++)
+            apiMsgs.push({ "role": msgs.get(i).role, "content": msgs.get(i).text });
+        // Suprime el "thinking" de Qwen3 tambien en motores que ignoran chat_template_kwargs
+        // (p.ej. llamafile): '/no_think' como soft-switch en el ultimo mensaje de usuario.
+        // Solo va a la API, no se muestra en la UI.
+        if (apiMsgs.length > 0 && apiMsgs[apiMsgs.length - 1].role === "user")
+            apiMsgs[apiMsgs.length - 1].content += " /no_think";
+
+        msgs.append({ "role": "assistant", "text": "" });   // se rellena al streamear
+        var slot = msgs.count - 1;
+        chat.streaming = true;
+        listView.positionViewAtEnd();
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", chat.aiUrl + "/v1/chat/completions");
+        xhr.setRequestHeader("Content-Type", "application/json");
+        var processed = 0;
+        var raw = "";   // texto crudo acumulado; lo mostrado pasa por _stripThink()
+
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState >= XMLHttpRequest.LOADING) {
+                var parts = xhr.responseText.split("\n");
+                var upTo = (xhr.readyState === XMLHttpRequest.DONE) ? parts.length : parts.length - 1;
+                for (; processed < upTo; processed++) {
+                    var line = parts[processed];
+                    if (line.indexOf("data:") !== 0) continue;
+                    var payload = line.substring(5).trim();
+                    if (payload === "" || payload === "[DONE]") continue;
+                    try {
+                        var o = JSON.parse(payload);
+                        var d = o.choices && o.choices[0] && o.choices[0].delta
+                              ? o.choices[0].delta.content : "";
+                        if (d) {
+                            raw += d;
+                            msgs.setProperty(slot, "text", chat._stripThink(raw));
+                            listView.positionViewAtEnd();
+                        }
+                    } catch (e) { /* linea parcial */ }
+                }
+            }
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                chat.streaming = false;
+                if (msgs.get(slot).text === "")
+                    msgs.setProperty(slot, "text", "…(sin respuesta — ¿está corriendo el motor de IA?)");
+                console.log("miiamia[chat] <" + chat.model + ">:", msgs.get(slot).text);
+            }
+        };
+        // chat_template_kwargs.enable_thinking=false -> suprime el modo "thinking" (CoT) de Qwen3 en
+        // llama-server; si no, Qwen3 manda el razonamiento a delta.reasoning_content (no content) y el
+        // streaming se ve en blanco y luego de golpe. Otros backends (Ollama) ignoran el campo.
+        xhr.send(JSON.stringify({ "model": chat.model, "messages": apiMsgs, "stream": true,
+            "chat_template_kwargs": { "enable_thinking": false } }));
+    }
+
+    // Qwen3 con thinking suprimido emite un bloque <think>...</think> (a veces vacío) al inicio del
+    // contenido. Lo quitamos para no mostrarlo. Mientras el bloque está abierto, no mostramos nada.
+    function _stripThink(t) {
+        var m = t.match(/^\s*<think>[\s\S]*?<\/think>\s*/);
+        if (m) return t.substring(m[0].length);
+        if (/^\s*<think>/.test(t) && t.indexOf("</think>") === -1) return "";
+        return t;
+    }
+
+    // --- UI ---
+    Rectangle {
+        anchors.fill: parent
+        radius: 18
+        color: "#ee1d1b2e"
+        border.color: "#66a78cff"
+        border.width: 1
+
+        Column {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 8
+
+            Row {
+                width: parent.width
+                spacing: 8
+                Rectangle { width: 10; height: 10; radius: 5; color: "#a78cff"; anchors.verticalCenter: parent.verticalCenter }
+                Text { text: chat.charName; color: "#efe9ff"; font.pixelSize: 15; font.bold: true }
+                Item { width: parent.width - 180; height: 1 }
+                Text {
+                    text: "⚙"; color: "#9a8fc0"; font.pixelSize: 16
+                    MouseArea { anchors.fill: parent; onClicked: chat.openSettings() }
+                }
+                Text {
+                    text: chat.streaming ? "escribiendo…" : "✕"
+                    color: "#9a8fc0"; font.pixelSize: 13
+                    MouseArea { anchors.fill: parent; enabled: !chat.streaming; onClicked: chat.open = false }
+                }
+            }
+
+            ListView {
+                id: listView
+                width: parent.width
+                height: parent.height - 92
+                clip: true
+                spacing: 8
+                model: msgs
+                delegate: Column {
+                    width: ListView.view.width
+                    Rectangle {
+                        property bool mine: role === "user"
+                        anchors.right: mine ? parent.right : undefined
+                        width: Math.min(parent.width * 0.82, label.implicitWidth + 22)
+                        height: label.implicitHeight + 16
+                        radius: 12
+                        color: mine ? "#5b46a0" : "#2c2a44"
+                        Text {
+                            id: label
+                            anchors.fill: parent
+                            anchors.margins: 8
+                            text: model.text
+                            color: "#f2eeff"
+                            wrapMode: Text.Wrap
+                            font.pixelSize: 14
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: parent.width
+                height: 40
+                radius: 12
+                color: "#2c2a44"
+                TextField {
+                    id: input
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    placeholderText: !chat.backendReady ? ("Encendiendo a " + chat.charName + "…")
+                                   : chat.streaming ? (chat.charName + " está pensando…")
+                                   : ("Escríbele a " + chat.charName + "…")
+                    placeholderTextColor: "#7d73a8"
+                    color: "#f2eeff"
+                    font.pixelSize: 14
+                    background: Item {}
+                    enabled: chat.backendReady && !chat.streaming
+                    onAccepted: { if (text.trim()) { chat.send(text.trim()); text = ""; } }
+                }
+            }
+        }
+    }
+
+    // Autotest opcional: MIIAMIA_SELFTEST=1 -> envia un saludo al abrir (verifica el pipeline IA).
+    Component.onCompleted: {
+        if (Quickshell.env("MIIAMIA_SELFTEST") === "1") { chat.open = true; selftest.start(); }
+    }
+    // Espera a que el motor encienda antes de enviar el saludo de prueba.
+    Timer {
+        id: selftest
+        interval: 500; repeat: true
+        onTriggered: if (chat.backendReady) { stop(); chat.send("Hola, preséntate en una sola frase."); }
+    }
+}

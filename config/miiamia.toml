@@ -1,0 +1,20 @@
+# Configuracion de miiamia
+# La leen los daemons Python (contexto + IA). El overlay QML la consumira en M2.
+
+active_character = "kira"
+
+[ai]
+ollama_url       = "http://127.0.0.1:11434"
+chat_model       = "kira"        # persona normal  (ollama create kira       -f ai/personas/kira.modelfile)
+chat_model_gaming = "kira-small" # persona ligera   (ollama create kira-small -f ai/personas/kira_small.modelfile)
+
+[voice]
+language   = "es"
+tts_engine = "piper"             # piper | kokoro
+tts_voice  = "es_ES-sharvard-medium"
+stt_model  = "large-v3-turbo"    # faster-whisper; degrada a 'small' en CPU durante gaming
+
+[behavior]
+gaming_mode_auto   = true        # libera la VRAM del LLM al detectar un juego (OLLAMA_KEEP_ALIVE=0)
+idle_timeout_secs  = 30          # tras esto -> estado 'sleeping'
+enable_evdev_typing = false      # tecleo real via /dev/input (requiere estar en el grupo 'input'); off = heuristica por app

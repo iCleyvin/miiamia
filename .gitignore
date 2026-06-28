@@ -1,0 +1,21 @@
+# Live2D Cubism Core (binario propietario de Live2D Inc., NO redistribuible)
+renderer/src/lib/live2dcubismcore.min.js
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venvs/
+
+# Node / web renderer (M5+)
+node_modules/
+renderer/dist/
+
+# Modelos y voces (grandes; se descargan con install/ollama/piper)
+*.onnx
+*.onnx.json
+*.gguf
+
+# Logs / temporales
+*.log
+*.qslog

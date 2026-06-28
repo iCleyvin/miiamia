@@ -1,0 +1,18 @@
+[Unit]
+Description=miiamia — overlay de mascota virtual (Quickshell sobre Hyprland)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+# %h = $HOME del usuario. Ajusta la ruta si clonaste el proyecto en otro lugar.
+ExecStart=/usr/bin/quickshell -p %h/miiamia/shell
+Restart=on-failure
+RestartSec=3
+# Mata todo el cgroup en stop (llama-server/whisper-server/pw-cat/piper hijos no quedan huérfanos).
+KillMode=control-group
+TimeoutStopSec=5
+# Recarga en vivo: `systemctl --user restart miiamia` tras editar el QML.
+
+[Install]
+WantedBy=graphical-session.target

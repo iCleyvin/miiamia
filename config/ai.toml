@@ -1,0 +1,21 @@
+# ~/.config/miiamia/ai.toml — config del backend de IA (separada de miiamia.toml).
+# Este archivo en el repo es la PLANTILLA por defecto. tools/provision.sh escribe la versión
+# activa en ~/.config/miiamia/ai.toml tras detectar tu hardware y descargar el modelo.
+# AIBackend.qml la lee con FileView. Editable a mano.
+
+[ai]
+backend          = "embedded"               # "embedded" (motor propio) | "ollama" | "external"
+endpoint         = "http://127.0.0.1:8080"  # llama-server (8080) — coincide con ChatBubble.aiUrl
+model_tier       = "auto"                   # "auto"|"micro"|"slim"|"default"|"full"
+model_path       = ""                       # ruta al GGUF; vacío = ~/.cache/miiamia/models/ (lo pone provision.sh)
+ctx_size         = 4096
+n_predict        = 512
+downloaded       = false                    # provision.sh -> true tras verificar SHA256
+sha256           = ""
+idle_unload_secs = 180                      # descargar el motor tras N s de inactividad (0 = nunca)
+gaming_unload    = true                     # matar llama-server al entrar en estado "gaming"
+reasoning        = "off"                    # Qwen3: "off" => --reasoning off (sin modo thinking)
+
+# Backend externo opcional (solo si backend="external"): OpenRouter, Groq, etc.
+external_url     = ""
+external_api_key = ""
