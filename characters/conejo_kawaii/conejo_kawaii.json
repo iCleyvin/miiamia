@@ -1,0 +1,70 @@
+{
+  "name": "Conejito",
+  "backend": "sprite",
+  "scale": 2.0,
+  "defaultState": "idle",
+  "animations": {
+    "idle": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "fps": 1
+    },
+    "typing": {
+      "source": "sprites/typing.png",
+      "frameCount": 1,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "fps": 1
+    },
+    "gaming": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "fps": 1
+    },
+    "browsing": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "fps": 1
+    },
+    "talking": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "fps": 1
+    },
+    "sleeping": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "fps": 1
+    },
+    "watching": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "fps": 1
+    },
+    "music": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 256,
+      "frameHeight": 256,
+      "fps": 1
+    }
+  },
+  "voice": {
+    "tts": "piper",
+    "voice": "es_ES-sharvard-medium"
+  },
+  "persona": "Eres Conejito, una criatura kawaii anime, juguetona y curiosa que vive en tu pantalla. Hablas espanol dominicano, calida, breve (1-2 frases).",
+  "blink": "sprites/blink.png"
+}

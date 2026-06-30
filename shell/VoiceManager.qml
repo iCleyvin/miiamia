@@ -15,6 +15,8 @@ Scope {
     property string model: "kira"
     property string persona: ""
     property string ttsVoice: "es_ES-sharvard-medium"
+    property string voiceFx: ""        // efecto de voz por pet (p.ej. "infernal"); "" = sin efecto
+    property real   lengthScale: 1.0   // velocidad de habla (>1.0 = más lento y pausado)
     property string sttModel: "ggml-base"
     property string language: "es"
     property int    speaker: 1
@@ -40,6 +42,7 @@ Scope {
     function pttStart() { console.log("miiamia[voice]: PTT start"); recordingStarted(); _send({ "cmd": "ptt_start" }); }
     function pttStop()  { console.log("miiamia[voice]: PTT stop"); _send({ "cmd": "ptt_stop" }); }
     function cancel()   { _send({ "cmd": "cancel" }); }
+    function say(text)  { _send({ "cmd": "say", "text": text }); }   // hablar un texto suelto (comentario espontáneo)
     function setGaming(on) { _send({ "cmd": "gaming", "on": on }); }
 
     function _send(obj) {
@@ -48,6 +51,7 @@ Scope {
     function _sendConfig() {
         _send({ "cmd": "config", "ai_url": aiUrl, "model": model, "persona": persona,
                 "piper_bin": piperBin, "piper_voice": piperVoice, "speaker": speaker,
+                "voice_fx": voiceFx, "length_scale": lengthScale,
                 "whisper_bin": whisperBin, "whisper_model": whisperModel, "language": language });
     }
 
@@ -76,6 +80,8 @@ Scope {
     onAiUrlChanged: if (daemonReady) _sendConfig()
     onPersonaChanged: if (daemonReady) _sendConfig()
     onTtsVoiceChanged: if (daemonReady) _sendConfig()
+    onVoiceFxChanged: if (daemonReady) _sendConfig()
+    onLengthScaleChanged: if (daemonReady) _sendConfig()
     onSttModelChanged: if (daemonReady) _sendConfig()
     onLanguageChanged: if (daemonReady) _sendConfig()
 }

@@ -9,6 +9,7 @@
 import QtQuick
 import QtQuick.Controls
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 
 PanelWindow {
@@ -23,6 +24,8 @@ PanelWindow {
     property bool backendReady: true  // <- AIBackend pone false mientras enciende el motor
     signal sent()                     // emitido al mandar un mensaje (shell.qml -> ensureRunning)
     signal openSettings()             // el ⚙ abre el menú de configuración
+    property string pendingVisionText: ""
+    readonly property string eyePath: Quickshell.env("HOME") + "/.cache/miiamia/eyes/last.png"
 
     visible: open
     onOpenChanged: if (open) input.forceActiveFocus()
@@ -42,20 +45,39 @@ PanelWindow {
 
     // --- Llamada al modelo con streaming (OpenAI /v1, Server-Sent Events) ---
     function send(text) {
-        if (!text || chat.streaming || !chat.backendReady) return;
-        chat.sent();
-        msgs.append({ "role": "user", "text": text });
+        chat._sendContent(text, text);
+    }
 
-        // Construye los mensajes para la API: persona (system) + conversacion.
+    function captureVision(text) {
+        if (chat.streaming || !chat.backendReady) return;
+        chat.pendingVisionText = text && text.length > 0
+            ? text
+            : "Mira mi pantalla y dime qué ves. Si hay algo importante, descríbelo y dime qué puedes hacer con eso.";
+        eyeCapture.command = ["bash", "-lc", "mkdir -p ~/.cache/miiamia/eyes && grim -t png ~/.cache/miiamia/eyes/last.png"];
+        eyeCapture.running = true;
+    }
+
+    function sendVision(path, text) {
+        var content = [
+            { "type": "text", "text": text },
+            { "type": "image_url", "image_url": { "url": "file://" + path } }
+        ];
+        chat._sendContent("👁 " + text, content);
+    }
+
+    function _sendContent(displayText, apiContent) {
+        if (!displayText || chat.streaming || !chat.backendReady) return;
+        chat.sent();
+        msgs.append({ "role": "user", "text": displayText });
+
+        // Construye los mensajes para la API: persona (system) + TODA la conversacion (memoria).
         var apiMsgs = [];
         if (chat.persona) apiMsgs.push({ "role": "system", "content": chat.persona });
-        for (var i = 0; i < msgs.count; i++)
+        for (var i = 0; i < msgs.count - 1; i++)
             apiMsgs.push({ "role": msgs.get(i).role, "content": msgs.get(i).text });
-        // Suprime el "thinking" de Qwen3 tambien en motores que ignoran chat_template_kwargs
-        // (p.ej. llamafile): '/no_think' como soft-switch en el ultimo mensaje de usuario.
-        // Solo va a la API, no se muestra en la UI.
-        if (apiMsgs.length > 0 && apiMsgs[apiMsgs.length - 1].role === "user")
-            apiMsgs[apiMsgs.length - 1].content += " /no_think";
+        apiMsgs.push({ "role": "user", "content": apiContent });
+        // (El "thinking" de Qwen3 se suprime con chat_template_kwargs abajo; NO ensuciar el
+        //  mensaje del usuario con '/no_think' — es de SmolLM3 y confunde el hilo.)
 
         msgs.append({ "role": "assistant", "text": "" });   // se rellena al streamear
         var slot = msgs.count - 1;
@@ -103,6 +125,17 @@ PanelWindow {
             "chat_template_kwargs": { "enable_thinking": false } }));
     }
 
+    Process {
+        id: eyeCapture
+        onExited: function (code) {
+            if (code === 0) chat.sendVision(chat.eyePath, chat.pendingVisionText);
+            else {
+                msgs.append({ "role": "assistant", "text": "No pude capturar la pantalla con grim." });
+                console.error("miiamia[eyes]: grim falló con código", code);
+            }
+        }
+    }
+
     // Qwen3 con thinking suprimido emite un bloque <think>...</think> (a veces vacío) al inicio del
     // contenido. Lo quitamos para no mostrarlo. Mientras el bloque está abierto, no mostramos nada.
     function _stripThink(t) {
@@ -130,7 +163,19 @@ PanelWindow {
                 spacing: 8
                 Rectangle { width: 10; height: 10; radius: 5; color: "#a78cff"; anchors.verticalCenter: parent.verticalCenter }
                 Text { text: chat.charName; color: "#efe9ff"; font.pixelSize: 15; font.bold: true }
-                Item { width: parent.width - 180; height: 1 }
+                Item { width: parent.width - 205; height: 1 }
+                Text {
+                    text: "👁"; color: "#9a8fc0"; font.pixelSize: 15
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: chat.backendReady && !chat.streaming
+                        onClicked: {
+                            var t = input.text.trim();
+                            if (t.length > 0) input.text = "";
+                            chat.captureVision(t);
+                        }
+                    }
+                }
                 Text {
                     text: "⚙"; color: "#9a8fc0"; font.pixelSize: 16
                     MouseArea { anchors.fill: parent; onClicked: chat.openSettings() }

@@ -1,0 +1,79 @@
+{
+  "name": "Averno",
+  "backend": "dragonRig",
+  "scale": 2.2,
+  "defaultState": "idle",
+  "rig": {
+    "body": "sprites/dragon_rig/body.png",
+    "head": "sprites/dragon_rig/head.png",
+    "wing_l": "sprites/dragon_rig/wing_l.png",
+    "wing_r": "sprites/dragon_rig/wing_r.png",
+    "tail": "sprites/dragon_rig/tail.png",
+    "glow": "sprites/dragon_rig/glow.png",
+    "mouth_glow": "sprites/dragon_rig/mouth_glow.png",
+    "size": 512
+  },
+  "animations": {
+    "idle": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "typing": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "gaming": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "browsing": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "talking": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "sleeping": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "watching": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "music": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    }
+  },
+  "voice": {
+    "tts": "piper",
+    "voice": "es_ES-sharvard-medium"
+  },
+  "persona": "Eres Averno, un dragon infernal antiguo que vive en la pantalla de tu humano. Hablas espanol dominicano, con presencia oscura, protectora y directa. Eres intenso pero leal; respondes breve, como una criatura sabia venida del inframundo."
+}

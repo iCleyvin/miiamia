@@ -19,3 +19,22 @@ renderer/dist/
 # Logs / temporales
 *.log
 *.qslog
+
+# Pesados / regenerables / locales (NO subir)
+# native/ = experimentos Live2D + repos clonados (inox2d) + binarios (~1GB)
+native/
+# modelos torch (p.ej. mobile_sam.pt)
+*.pt
+# capturas, grabaciones de prueba, modelos locales
+.cache/
+# respaldos locales del worktree
+.backups/
+# respaldos puntuales de archivos
+*.bak
+*.bak.*
+
+# Guía interna privada (NO subir)
+CLAUDE.md
+NIGHT_REPORT.md
+PLAN_LIVE2D.md
+INSTRUCCIONES_LIVE2D.md

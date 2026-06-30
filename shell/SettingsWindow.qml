@@ -23,6 +23,11 @@ PanelWindow {
     property string monitor: ""
     property string persona: ""
     property string customModel: ""
+    property string agentProvider: "local"
+    property bool agentHasKey: false      // si ya hay key guardada (NO se carga la key real en el cliente)
+    property string agentBaseUrl: ""
+    property string agentModel: ""
+    property bool agentToolsEnabled: false
     property string recModelLabel: "Qwen3-4B (alineado) ✓"
     property string aiInfo: "—"
     property bool open: false
@@ -36,6 +41,11 @@ PanelWindow {
     signal setMonitor(string v)
     signal setPersona(string v)
     signal setCustomModel(string v)
+    signal setProvider(string v)
+    signal setApiKey(string v)
+    signal setBaseUrl(string v)
+    signal setModel(string v)
+    signal setToolsEnabled(bool v)
     signal redetect()
 
     readonly property string _tools: Quickshell.shellDir + "/../tools"
@@ -74,6 +84,15 @@ PanelWindow {
         { id: "pt", label: "Português" }, { id: "fr", label: "Français" },
         { id: "it", label: "Italiano" }
     ]
+    readonly property var providers: [
+        { id: "local",      label: "Local — gratis y privado ✓ (en tu PC)" },
+        { id: "claude-cli", label: "Claude Code — tu cuenta, sin API key ✨ (claude -p)" },
+        { id: "claude",     label: "Claude — API key de Anthropic" },
+        { id: "opencode",   label: "opencode — API key" },
+        { id: "cloud",      label: "Nube OpenAI-compat — URL + key" }
+    ]
+    // proveedores que NO necesitan API key (usan login local del CLI)
+    function _needsKey(p) { return p !== "local" && p !== "claude-cli"; }
     readonly property var screenOpts: {
         var a = [{ id: "", label: "Automática (donde aparezca)" }];
         var ss = Quickshell.screens;
@@ -244,8 +263,91 @@ PanelWindow {
                     }
                 }
 
+                // ---- Proveedor del cerebro (local / nube) ----
+                Text { text: "PROVEEDOR DEL CEREBRO"; color: "#a78cff"; font.pixelSize: 12; font.bold: true }
+                Column {
+                    width: parent.width; spacing: 8
+                    Text {
+                        text: "Quién piensa por tu pet. Local = gratis y privado (en tu PC). Nube = más inteligente (usa tu API key)."
+                        color: "#cfc7e8"; font.pixelSize: 13; wrapMode: Text.Wrap; width: parent.width
+                    }
+                    ComboBox {
+                        width: parent.width
+                        model: win.providers; textRole: "label"
+                        currentIndex: win._idx(win.providers, win.agentProvider)
+                        onActivated: win.setProvider(win.providers[currentIndex].id)
+                    }
+                    Text {
+                        visible: win.agentProvider === "claude-cli"
+                        text: "Usa tu sesión de Claude Code (claude -p). Inicia sesión una vez con «claude» en tu terminal; cada quien usa su propia cuenta. No se necesita API key."
+                        color: "#9fe0b0"; font.pixelSize: 12; wrapMode: Text.Wrap; width: parent.width
+                    }
+                    Column {
+                        width: parent.width; spacing: 4
+                        visible: win._needsKey(win.agentProvider)
+                        Text { text: "API key (se guarda SOLO en tu equipo, ~/.config/miiamia)"; color: "#cfc7e8"; font.pixelSize: 12 }
+                        Rectangle {
+                            width: parent.width; height: 36; radius: 8; color: "#2c2a44"
+                            TextField {
+                                id: apiKeyField
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                                echoMode: TextInput.Password
+                                // No se precarga la key (no exponerla en el cliente); solo se escribe la nueva.
+                                placeholderText: win.agentHasKey ? "configurada ✓ — escribe para cambiarla" : "pega tu API key…"
+                                color: "#f2eeff"; font.pixelSize: 12; background: Item {}
+                                onEditingFinished: if (text.trim().length > 0) win.setApiKey(text.trim())
+                            }
+                        }
+                    }
+                    Column {
+                        width: parent.width; spacing: 4
+                        visible: win.agentProvider === "cloud"
+                        Text { text: "URL base OpenAI-compat (ej: https://api.groq.com/openai/v1)"; color: "#cfc7e8"; font.pixelSize: 12 }
+                        Rectangle {
+                            width: parent.width; height: 36; radius: 8; color: "#2c2a44"
+                            TextField {
+                                id: baseUrlField
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                                text: win.agentBaseUrl
+                                placeholderText: "https://…/v1"
+                                color: "#f2eeff"; font.pixelSize: 12; background: Item {}
+                                onEditingFinished: win.setBaseUrl(text)
+                            }
+                        }
+                    }
+                    Column {
+                        width: parent.width; spacing: 4
+                        visible: win.agentProvider !== "local"
+                        Text { text: "Modelo (vacío = el por defecto del proveedor)"; color: "#cfc7e8"; font.pixelSize: 12 }
+                        Rectangle {
+                            width: parent.width; height: 36; radius: 8; color: "#2c2a44"
+                            TextField {
+                                id: modelField
+                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+                                text: win.agentModel
+                                placeholderText: "ej: claude-sonnet-4-6 / gpt-4o-mini"
+                                color: "#f2eeff"; font.pixelSize: 12; background: Item {}
+                                onEditingFinished: win.setModel(text)
+                            }
+                        }
+                    }
+                    Row {
+                        width: parent.width; spacing: 8
+                        CheckBox {
+                            id: toolsCheck
+                            checked: win.agentToolsEnabled
+                            onToggled: win.setToolsEnabled(checked)
+                        }
+                        Text {
+                            text: "🖐️ Darle manos (abrir apps, música, volumen, web). El modelo puede controlar tu PC."
+                            color: "#cfc7e8"; font.pixelSize: 12; wrapMode: Text.Wrap
+                            width: parent.width - 44
+                        }
+                    }
+                }
+
                 // ---- Cerebro (IA) ----
-                Text { text: "CEREBRO (IA)"; color: "#a78cff"; font.pixelSize: 12; font.bold: true }
+                Text { text: "CEREBRO (IA local)"; color: "#a78cff"; font.pixelSize: 12; font.bold: true }
                 Column {
                     width: parent.width; spacing: 8
                     Text { text: win.aiInfo; color: "#cfc7e8"; font.pixelSize: 13; wrapMode: Text.Wrap; width: parent.width }

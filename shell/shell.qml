@@ -64,12 +64,45 @@ ShellRoot {
         if (s.persona === undefined) s.persona = "";
         if (s.custom_model === undefined) s.custom_model = "";
         if (s.active_character === undefined) s.active_character = "kira";
+        // Bloque "agent" (cerebro multi-provider + manos). Defaults = comportamiento actual (local, sin tools).
+        if (!s.agent) s.agent = {};
+        if (s.agent.provider === undefined) s.agent.provider = "local";
+        if (s.agent.api_key === undefined) s.agent.api_key = "";
+        if (s.agent.base_url === undefined) s.agent.base_url = "";
+        if (s.agent.model === undefined) s.agent.model = "";
+        if (!s.agent.tools) s.agent.tools = { enabled: false };
+        if (s.agent.tools.enabled === undefined) s.agent.tools.enabled = false;
+        // Vista automática: la pet mira la pantalla sola y comenta por iniciativa propia.
+        if (!s.agent.auto_vision) s.agent.auto_vision = {};
+        if (s.agent.auto_vision.enabled === undefined) s.agent.auto_vision.enabled = false;
+        if (s.agent.auto_vision.interval_secs === undefined) s.agent.auto_vision.interval_secs = 240;
+        if (s.agent.auto_vision.tts === undefined) s.agent.auto_vision.tts = true;
         return s;
+    }
+    // Provider EFECTIVO (mismo criterio que el daemon): cae a local si está mal configurado.
+    // Permite que AIBackend sepa si saltarse el motor local (cloud => 0 RAM/VRAM de modelo).
+    readonly property string effectiveProvider: {
+        var a = settings.agent || {};
+        var p = a.provider || "local";
+        if (p === "local") return "local";
+        if (p === "claude-cli") return "claude-cli";   // CLI `claude` con login del usuario (sin key)
+        if (p === "cloud") return (a.base_url && a.api_key) ? "cloud" : "local";
+        return a.api_key ? p : "local";   // claude / opencode
     }
     // Persona activa: la del menú si el usuario la definió; si no, la del personaje.
     readonly property string effectivePersona:
         (settings.persona && settings.persona.length > 0) ? settings.persona
         : (manifest.persona !== undefined ? manifest.persona : "")
+
+    // Voz POR PET: solo si el manifest declara voice.fx (opt-in) se usa su voz/efecto/velocidad
+    // propios; si no, se respeta la voz global de ajustes (no toca las demás skins, que traen
+    // voice sin fx). Así el dragón suena infernal y lento SOLO para esta pet.
+    readonly property var _petVoice:
+        (manifest.voice !== undefined && manifest.voice && manifest.voice.fx) ? manifest.voice : null
+    readonly property string effectiveTtsVoice: _petVoice ? _petVoice.voice : settings.voice.tts_voice
+    readonly property string effectiveVoiceFx: _petVoice ? _petVoice.fx : ""
+    readonly property real effectiveLengthScale:
+        (_petVoice && _petVoice.length_scale !== undefined) ? _petVoice.length_scale : 1.0
     function applySetting(path, value) {
         var s = JSON.parse(JSON.stringify(app.settings));   // clon profundo
         var parts = path.split(".");
@@ -97,6 +130,7 @@ ShellRoot {
     AIBackend {
         id: ai
         contextState: context.state
+        agentProvider: app.effectiveProvider   // local o cloud; decide si arranca el motor local
         modelOverride: app.settings.custom_model !== undefined ? app.settings.custom_model : ""
     }
 
@@ -106,7 +140,9 @@ ShellRoot {
         aiUrl: ai.endpoint
         model: "kira"
         persona: app.effectivePersona
-        ttsVoice: app.settings.voice.tts_voice
+        ttsVoice: app.effectiveTtsVoice
+        voiceFx: app.effectiveVoiceFx
+        lengthScale: app.effectiveLengthScale
         sttModel: app.settings.voice.stt_model
         language: app.settings.voice.language
         onRecordingStarted: ai.ensureRunning()   // calienta el motor mientras hablas
@@ -144,8 +180,13 @@ ShellRoot {
         monitor: app.settings.monitor !== undefined ? app.settings.monitor : ""
         persona: app.effectivePersona
         customModel: app.settings.custom_model !== undefined ? app.settings.custom_model : ""
-        aiInfo: "Backend: " + ai.backend + "  ·  modelo: "
-                + (ai.effectiveModelPath ? ai.effectiveModelPath.split("/").pop() : "—") + "  ·  " + ai.status
+        agentProvider: app.settings.agent.provider
+        agentHasKey: (app.settings.agent.api_key || "").length > 0
+        agentBaseUrl: app.settings.agent.base_url
+        agentModel: app.settings.agent.model
+        agentToolsEnabled: app.settings.agent.tools.enabled
+        aiInfo: "Cerebro: " + (app.effectiveProvider === "local" ? "local (" + ai.backend + ")" : app.effectiveProvider)
+                + "  ·  modelo: " + (ai.effectiveModelPath ? ai.effectiveModelPath.split("/").pop() : "—") + "  ·  " + ai.status
         onSetScale: function (v) { app.applySetting("scale", v) }
         onSetCharacter: function (v) { app.applySetting("active_character", v) }
         onSetVoice: function (v) { app.applySetting("voice.tts_voice", v) }
@@ -154,12 +195,43 @@ ShellRoot {
         onSetMonitor: function (v) { app.applySetting("monitor", v) }
         onSetPersona: function (v) { app.applySetting("persona", v) }
         onSetCustomModel: function (v) { app.applySetting("custom_model", v) }
+        onSetProvider: function (v) { app.applySetting("agent.provider", v) }
+        onSetApiKey: function (v) { app.applySetting("agent.api_key", v) }
+        onSetBaseUrl: function (v) { app.applySetting("agent.base_url", v) }
+        onSetModel: function (v) { app.applySetting("agent.model", v) }
+        onSetToolsEnabled: function (v) { app.applySetting("agent.tools.enabled", v) }
         onRedetect: provisioner.running = true
     }
 
+    // Vista automática con interacción propia: la pet mira la pantalla cada cierto tiempo (con gating)
+    // y suelta un comentario espontáneo -> globo sobre la pet + voz (TTS). Solo con cerebro con visión.
+    AutoVision {
+        id: autoVision
+        aiUrl: ai.endpoint
+        persona: app.effectivePersona
+        model: "kira"
+        enabled: app.settings.agent.auto_vision.enabled === true
+        intervalMs: Math.max(60, (app.settings.agent.auto_vision.interval_secs || 240)) * 1000
+        providerHasVision: app.effectiveProvider !== "local"
+        monitorName: app.settings.monitor !== undefined ? app.settings.monitor : ""
+        contextState: context.state
+        chatOpen: chatWindow.open
+        talking: chatWindow.streaming
+        voiceState: voice.voiceState
+        backendReady: ai.ready
+        onNeedsWarmup: ai.ensureRunning()
+        onRemark: function (text) {
+            petWindow.bubbleText = text;
+            if (app.settings.agent.auto_vision.tts === true) voice.say(text);
+        }
+    }
+
     Pet {
+        id: petWindow
         petData: app.manifest
         characterDir: app.characterDir
+        projectRoot: app.projectRoot
+        live2dConf: app.manifest.live2d !== undefined ? app.manifest.live2d : null
         scaleOverride: app.settings.scale
         monitorName: app.settings.monitor !== undefined ? app.settings.monitor : ""
         contextState: context.state
@@ -169,6 +241,17 @@ ShellRoot {
         onPetClicked: chatWindow.open = !chatWindow.open
         onVoicePttStart: voice.pttStart()
         onVoicePttStop: voice.pttStop()
+    }
+
+    // Calienta el cerebro (solo el /health del daemon) un par de segundos tras arrancar — ya con
+    // ai.toml cargado — para que el primer vistazo automático lo encuentre listo. DEFERIDO a propósito:
+    // si corriera antes de _loadConfig, AIBackend creería que es "embedded" y arrancaría llama-server
+    // (gastando VRAM) sin necesidad, ya que en claude-cli/nube el cerebro no usa motor local.
+    Timer {
+        id: autoVisionWarmup
+        interval: 2500; repeat: false
+        running: app.settings.agent.auto_vision.enabled === true && app.effectiveProvider !== "local"
+        onTriggered: ai.ensureRunning()
     }
 
     Component.onCompleted: {

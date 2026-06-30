@@ -1,5 +1,17 @@
 [
   {
+    "id": "aka_live2d",
+    "label": "Aka — Live2D 🦊"
+  },
+  {
+    "id": "dragon_inframundo",
+    "label": "Averno — Dragón del Inframundo"
+  },
+  {
+    "id": "dragon_inframundo_v2",
+    "label": "Averno v2 — Dragón Vivo"
+  },
+  {
     "id": "kira",
     "label": "Kira — violeta"
   },
@@ -102,5 +114,41 @@
   {
     "id": "axolotl_golden",
     "label": "Ajolote — Dorado Albino"
+  },
+  {
+    "id": "drag_kawaii",
+    "label": "Dragoncita ✨"
+  },
+  {
+    "id": "gato_kawaii",
+    "label": "Gatito ✨"
+  },
+  {
+    "id": "zorro_kawaii",
+    "label": "Zorrito ✨"
+  },
+  {
+    "id": "conejo_kawaii",
+    "label": "Conejito ✨"
+  },
+  {
+    "id": "slime_kawaii",
+    "label": "Slime ✨"
+  },
+  {
+    "id": "ajolote_kawaii",
+    "label": "Ajolote ✨"
+  },
+  {
+    "id": "pingu_kawaii",
+    "label": "Pinguino ✨"
+  },
+  {
+    "id": "panda_kawaii",
+    "label": "Panda rojo ✨"
+  },
+  {
+    "id": "fenix_kawaii",
+    "label": "Fenix ✨"
   }
 ]

@@ -1,0 +1,20 @@
+{
+  "name": "Aka (Live2D)",
+  "backend": "live2d",
+  "scale": 2.0,
+  "defaultState": "idle",
+  "live2d": {
+    "model": "native/example-models/Aka.inx",
+    "scale": 0.06,
+    "camx": 0,
+    "camy": 0,
+    "w": 460,
+    "h": 680
+  },
+  "animations": {},
+  "voice": {
+    "tts": "piper",
+    "voice": "es_ES-sharvard-medium"
+  },
+  "persona": "Eres Aka, una zorrita kawaii anime que vive en la pantalla. Hablas espanol, calida, juguetona y breve (1-2 frases)."
+}

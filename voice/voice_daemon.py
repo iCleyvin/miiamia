@@ -113,6 +113,9 @@ class VoiceDaemon:
             self.cancel()
         elif cmd == "reset":
             self.history = []
+        elif cmd == "say":
+            # La pet habla por iniciativa propia (comentario espontáneo): solo TTS, sin STT/LLM.
+            threading.Thread(target=self.speak_text, args=(msg.get("text", ""),), daemon=True).start()
         elif cmd == "gaming" and msg.get("on"):
             with self._whisper_lock:
                 if self.whisper:
@@ -245,6 +248,8 @@ class VoiceDaemon:
                 return
             tts.speak(sentence, self.cfg["piper_bin"], self.cfg["piper_voice"],
                       speaker=self.cfg.get("speaker", 1),
+                      fx=self.cfg.get("voice_fx", ""),
+                      length_scale=self.cfg.get("length_scale", 1.0),
                       amplitude_cb=lambda v: emit(event="amplitude", value=round(v, 3)),
                       stop_flag=lambda: self.stop_speaking)
 
@@ -269,6 +274,46 @@ class VoiceDaemon:
         emit(event="amplitude", value=0.0)
         emit(event="state", value="idle")
 
+    def speak_text(self, text: str):
+        """TTS de un texto dado (comentario espontáneo de la pet). Sin STT ni LLM.
+
+        Reusa el mismo camino que _converse: estado speaking + amplitud (lip-sync) + barge-in.
+        No pisa una conversación de voz en curso (respeta _pipeline_active)."""
+        text = (text or "").strip()
+        if not text or self._pipeline_active.is_set():
+            return
+        self._pipeline_active.set()
+        self.stop_speaking = False
+        self.speaking = True
+        emit(event="state", value="speaking")
+        splitter = SentenceSplitter()
+
+        def say(sentence: str):
+            if self.stop_speaking:
+                return
+            tts.speak(sentence, self.cfg["piper_bin"], self.cfg["piper_voice"],
+                      speaker=self.cfg.get("speaker", 1),
+                      fx=self.cfg.get("voice_fx", ""),
+                      length_scale=self.cfg.get("length_scale", 1.0),
+                      amplitude_cb=lambda v: emit(event="amplitude", value=round(v, 3)),
+                      stop_flag=lambda: self.stop_speaking)
+
+        try:
+            for sent in splitter.feed(text):
+                if self.stop_speaking:
+                    break
+                say(sent)
+            if not self.stop_speaking:
+                for sent in splitter.flush():
+                    say(sent)
+        except Exception as e:
+            emit(event="error", msg=str(e))
+        finally:
+            self.speaking = False
+            emit(event="amplitude", value=0.0)
+            emit(event="state", value="idle")
+            self._pipeline_active.clear()
+
     def _llm_stream(self, user_text: str):
         msgs = []
         if self.cfg.get("persona"):
@@ -280,7 +325,7 @@ class VoiceDaemon:
             "chat_template_kwargs": {"enable_thinking": False},
         })
         host, port = _hostport(self.cfg["ai_url"])
-        conn = http.client.HTTPConnection(host, port, timeout=120)
+        conn = http.client.HTTPConnection(host, port, timeout=30)   # voz: no congelar 2 min si el motor cuelga
         try:
             conn.request("POST", "/v1/chat/completions", body,
                          {"Content-Type": "application/json"})
