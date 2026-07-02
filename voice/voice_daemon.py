@@ -20,6 +20,7 @@ import io
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -34,6 +35,11 @@ import tts                              # noqa: E402
 
 _OUT_LOCK = threading.Lock()
 _THINK = re.compile(r"\s*<think>[\s\S]*?</think>\s*")
+# "Ojos por voz": si le pides que mire la pantalla, captura y manda la imagen al cerebro.
+_VISION_RE = re.compile(
+    r"(mira|miras|ve|ves|checa|revisa|observa|dime)[^.!?]{0,40}(pantalla|monitor)"
+    r"|qu[eé] (ves|hay|estoy (viendo|haciendo))"
+    r"|mira (esto|lo que)", re.I)
 
 
 def emit(**obj):
@@ -79,7 +85,10 @@ class VoiceDaemon:
             "piper_bin": "piper", "piper_voice": "", "speaker": 1,
             "whisper_bin": "whisper-server", "whisper_model": "",
             "whisper_port": 8765, "language": "es",
+            "vision": False,   # el cerebro efectivo tiene visión (lo pone shell.qml)
+            "monitor": "",     # monitor a capturar para los "ojos por voz"
         }
+        self._voice_dl = threading.Lock()   # una descarga de voz a la vez
         self.whisper = None
         self.rec_proc = None
         self.rec_buf = bytearray()
@@ -105,6 +114,7 @@ class VoiceDaemon:
                         self.whisper.stop()
                         self.whisper = None
             self.cfg.update(new)
+            self._ensure_voice()   # voz per-pet que aún no está en disco -> descargarla ya
         elif cmd == "ptt_start":
             self.start_recording()
         elif cmd == "ptt_stop":
@@ -121,6 +131,59 @@ class VoiceDaemon:
                 if self.whisper:
                     self.whisper.stop()
                     self.whisper = None
+
+    # ---------------- voz per-pet: auto-descarga si falta ----------------
+    def _ensure_voice(self):
+        """Si la voz Piper configurada no está en disco, la baja en segundo plano con
+        tools/get_voice.sh. Así una skin con voz temática funciona a la primera."""
+        vm = self.cfg.get("piper_voice", "")
+        if not vm or os.path.exists(vm):
+            return
+        name = os.path.basename(vm)
+        if name.endswith(".onnx"):
+            name = name[:-5]
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "get_voice.sh")
+        if not os.path.exists(script):
+            return
+
+        def dl():
+            if not self._voice_dl.acquire(blocking=False):
+                return   # ya hay una descarga en curso
+            try:
+                emit(event="info", msg=f"descargando la voz {name}…")
+                r = subprocess.run(["bash", script, name], capture_output=True, text=True, timeout=600)
+                if r.returncode == 0:
+                    emit(event="info", msg=f"voz {name} lista")
+                else:
+                    emit(event="error", msg=f"no pude descargar la voz {name}")
+            except Exception as e:
+                emit(event="error", msg=f"descarga de voz falló: {e}")
+            finally:
+                self._voice_dl.release()
+
+        threading.Thread(target=dl, daemon=True).start()
+
+    # ---------------- ojos por voz ----------------
+    def _capture_screen(self):
+        """Captura la pantalla para el cerebro con visión. Devuelve la ruta o None."""
+        path = os.path.expanduser("~/.cache/miiamia/eyes/voice.png")
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            cmd = ["grim"]
+            mon = self.cfg.get("monitor") or ""
+            if mon:
+                cmd += ["-o", mon]
+            cmd += ["-t", "png", path]
+            subprocess.run(cmd, check=True, timeout=10, capture_output=True)
+        except Exception:
+            return None
+        if shutil.which("magick"):   # menos tokens/latencia; sin magick va completa
+            try:
+                subprocess.run(["magick", path, "-resize", "1280x>", path],
+                               timeout=15, capture_output=True)
+            except Exception:
+                pass
+        return path
 
     # ---------------- grabación ----------------
     def start_recording(self):
@@ -241,6 +304,13 @@ class VoiceDaemon:
 
     def _converse(self, user_text: str):
         self._last_user = user_text
+        # "Ojos por voz": si pides que mire la pantalla y el cerebro tiene visión, se captura
+        # y se adjunta la imagen a este turno (el historial guarda solo el texto).
+        image_path = None
+        if self.cfg.get("vision") and _VISION_RE.search(user_text):
+            image_path = self._capture_screen()
+            if image_path is None:
+                emit(event="error", msg="no pude capturar la pantalla (¿grim instalado?)")
         self.stop_speaking = False   # limpia ANTES de marcar speaking (evita carrera con barge-in)
         splitter = SentenceSplitter()
         self.speaking = True
@@ -258,7 +328,7 @@ class VoiceDaemon:
                       stop_flag=lambda: self.stop_speaking)
 
         try:
-            for chunk in self._llm_stream(user_text):
+            for chunk in self._llm_stream(user_text, image_path=image_path):
                 if self.stop_speaking:
                     break
                 for sent in splitter.feed(chunk):
@@ -321,7 +391,7 @@ class VoiceDaemon:
             emit(event="state", value="idle")
             self._pipeline_active.clear()
 
-    def _llm_stream(self, user_text: str):
+    def _llm_stream(self, user_text: str, image_path: str = None):
         msgs = []
         if self.cfg.get("persona"):
             msgs.append({"role": "system", "content": self.cfg["persona"]})
@@ -329,7 +399,12 @@ class VoiceDaemon:
         # OJO: NO añadir "/no_think" al mensaje (es de SmolLM3, no de Qwen3): con Qwen3 entra
         # como texto plano al prompt y con provider cloud le llega tal cual a Claude. El thinking
         # se suprime con chat_template_kwargs.enable_thinking=false (abajo).
-        msgs.append({"role": "user", "content": user_text})
+        if image_path:
+            content = [{"type": "text", "text": user_text},
+                       {"type": "image_url", "image_url": {"url": "file://" + image_path}}]
+        else:
+            content = user_text
+        msgs.append({"role": "user", "content": content})
         body = json.dumps({
             "model": self.cfg["model"], "messages": msgs, "stream": True,
             "chat_template_kwargs": {"enable_thinking": False},

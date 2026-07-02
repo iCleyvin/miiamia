@@ -20,6 +20,8 @@ Scope {
     property string sttModel: "ggml-base"
     property string language: "es"
     property int    speaker: 1
+    property bool   vision: false      // el cerebro efectivo tiene visión ("ojos por voz")
+    property string monitorName: ""    // monitor a capturar al pedir "mira mi pantalla"
 
     // Rutas estándar (las prepara install/setup_voice.sh)
     readonly property string _home: Quickshell.env("HOME")
@@ -52,7 +54,8 @@ Scope {
         _send({ "cmd": "config", "ai_url": aiUrl, "model": model, "persona": persona,
                 "piper_bin": piperBin, "piper_voice": piperVoice, "speaker": speaker,
                 "voice_fx": voiceFx, "length_scale": lengthScale,
-                "whisper_bin": whisperBin, "whisper_model": whisperModel, "language": language });
+                "whisper_bin": whisperBin, "whisper_model": whisperModel, "language": language,
+                "vision": vision, "monitor": monitorName });
     }
 
     Process {
@@ -99,4 +102,6 @@ Scope {
     onLengthScaleChanged: if (daemonReady) _sendConfig()
     onSttModelChanged: if (daemonReady) _sendConfig()
     onLanguageChanged: if (daemonReady) _sendConfig()
+    onVisionChanged: if (daemonReady) _sendConfig()
+    onMonitorNameChanged: if (daemonReady) _sendConfig()
 }

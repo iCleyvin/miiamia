@@ -88,6 +88,10 @@ ShellRoot {
         if (s.agent.auto_vision.enabled === undefined) s.agent.auto_vision.enabled = false;
         if (s.agent.auto_vision.interval_secs === undefined) s.agent.auto_vision.interval_secs = 240;
         if (s.agent.auto_vision.tts === undefined) s.agent.auto_vision.tts = true;
+        // Reacciones por evento al contexto (juego/música/video…): instantáneas y locales.
+        if (!s.agent.reactions) s.agent.reactions = {};
+        if (s.agent.reactions.enabled === undefined) s.agent.reactions.enabled = true;
+        if (s.agent.reactions.tts === undefined) s.agent.reactions.tts = true;
         return s;
     }
     // Provider EFECTIVO (mismo criterio que el daemon): cae a local si está mal configurado.
@@ -178,6 +182,8 @@ ShellRoot {
         lengthScale: app.effectiveLengthScale
         sttModel: app.settings.voice.stt_model
         language: app.settings.voice.language
+        vision: app.effectiveProvider !== "local"   // "mira mi pantalla" por PTT -> ojos
+        monitorName: app.settings.monitor !== undefined ? app.settings.monitor : ""
         onRecordingStarted: ai.ensureRunning()   // calienta el motor mientras hablas
     }
     Connections {
@@ -223,6 +229,8 @@ ShellRoot {
         agentBaseUrl: app.settings.agent.base_url
         agentModel: app.settings.agent.model
         agentToolsEnabled: app.settings.agent.tools.enabled
+        reactionsOn: app.settings.agent.reactions.enabled === true
+        autoVisionOn: app.settings.agent.auto_vision.enabled === true
         aiInfo: "Cerebro: " + (app.effectiveProvider === "local" ? "local (" + ai.backend + ")" : app.effectiveProvider)
                 + "  ·  modelo: " + (ai.effectiveModelPath ? ai.effectiveModelPath.split("/").pop() : "—") + "  ·  " + ai.status
         onSetScale: function (v) { app.applySetting("scale", v) }
@@ -238,6 +246,8 @@ ShellRoot {
         onSetBaseUrl: function (v) { app.applySetting("agent.base_url", v) }
         onSetModel: function (v) { app.applySetting("agent.model", v) }
         onSetToolsEnabled: function (v) { app.applySetting("agent.tools.enabled", v) }
+        onSetReactions: function (v) { app.applySetting("agent.reactions.enabled", v) }
+        onSetAutoVision: function (v) { app.applySetting("agent.auto_vision.enabled", v) }
         onRedetect: provisioner.running = true
     }
 
@@ -261,6 +271,23 @@ ShellRoot {
         onRemark: function (text) {
             petWindow.bubbleText = text;
             if (app.settings.agent.auto_vision.tts === true) voice.say(text);
+        }
+    }
+
+    // Reacción por EVENTO al contexto: al abrir un juego / poner música / darle play a un video,
+    // la pet comenta AL MOMENTO en personaje (frases del manifest o defaults). Local e instantáneo.
+    Reactions {
+        id: reactions
+        enabled: app.settings.agent.reactions.enabled === true
+        manifest: app.manifest
+        contextState: context.state
+        chatOpen: chatWindow.open
+        talking: chatWindow.streaming
+        voiceState: voice.voiceState
+        onReact: function (state, text) {
+            petWindow.bubbleText = text;
+            // dormida solo el globo (susurra, no habla); el resto con voz si está activada
+            if (state !== "sleeping" && app.settings.agent.reactions.tts === true) voice.say(text);
         }
     }
 
