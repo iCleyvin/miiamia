@@ -1,140 +1,97 @@
 #!/usr/bin/env python3
-"""Sintetiza el paisaje sonoro de Nyx (humana cyberpunk) — stdlib puro.
+"""Diseño sonoro CINEMATOGRÁFICO de Nyx (humana cyberpunk) — sfx_kit (numpy+scipy).
 
-Nyx no hace ruidos de animal: suena su TECNOLOGÍA. Boot de sistema (arpegio synth),
-blips de interfaz, zap de glitch (ruido + AM metálico), whoosh de teletransporte,
-latido sub del corazón sintético. Salida: characters/nyx_cyber/sounds/*.wav.
+Nada de bleeps: cada evento son 2-4 capas (sub-bass saturado + barrido de ruido + pad
+desafinado + cristal FM) fundidas con reverb Schroeder y cola. Referencias: UI holográfica
+de cine sci-fi, no chiptune.
 
-Uso: python tools/art/gen_nyx_sounds.py
+Correr con el venv de arte:
+  ~/miiamia-art/.venv/bin/python tools/art/gen_nyx_sounds.py
 """
 from __future__ import annotations
 
-import math
-import random
-import struct
-import wave
+import sys
 from pathlib import Path
 
-SR = 22050
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import numpy as np
+from sfx_kit import (SR, env_exp, env_swell, fm_bell, grains, lowpass_sweep, master, mix,
+                     noise_sweep, pad, reverb, sine_sweep, sub, t_axis, write_wav)
+
 OUT = Path(__file__).resolve().parents[2] / "characters" / "nyx_cyber" / "sounds"
-random.seed(2077)
+OUT.mkdir(parents=True, exist_ok=True)
+print(f"Diseño sonoro de Nyx -> {OUT}")
 
+# --- boot.wav: encendido de holograma — sub que despierta + aire que sube + pad que
+#     florece + "ready" de cristal. Cola de reverb larga. (~2.6s)
+boot = mix(
+    (sub(28, 55, 1.3, decay=1.6) * 0.9, 0.0),                       # el peso despierta
+    (noise_sweep(1.5, 150, 7000, q=2.0, curve=1.4) * env_swell(1.5, 1.2, 0.25) * 0.5, 0.05),
+    (pad([110, 165, 220, 277], 1.8) * env_swell(1.8, 0.9, 0.5) * 0.55, 0.55),  # A+E+A+C#: florece
+    (fm_bell(880, 1.0, ratio=3.01, index=2.2, decay=3.0) * 0.5, 1.45),          # "sistema listo"
+    (fm_bell(1760, 0.8, ratio=2.41, index=1.5, decay=4.0) * 0.22, 1.52),
+)
+write_wav(OUT / "boot.wav", master(reverb(boot, wet=0.42, size=1.15, tail=1.1), 0.72))
 
-def write_wav(name: str, samples: list[float], gain: float = 0.8):
-    peak = max(1e-9, max(abs(s) for s in samples))
-    norm = gain / peak
-    data = b"".join(struct.pack("<h", int(max(-1.0, min(1.0, s * norm)) * 32767)) for s in samples)
-    OUT.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(OUT / name), "wb") as w:
-        w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
-        w.writeframes(data)
-    print(f"  ✓ {name} ({len(samples)/SR:.2f}s)")
+# --- blip.wav: toque holográfico — gota de cristal, no un bleep. (~0.6s)
+blip = mix(
+    (fm_bell(1320, 0.35, ratio=2.756, index=2.0, decay=9.0) * 0.8, 0.0),
+    (noise_sweep(0.12, 3000, 8000, q=3.0) * env_exp(0.12, 0.002, 18) * 0.18, 0.0),
+)
+write_wav(OUT / "blip.wav", master(reverb(blip, wet=0.3, size=0.8, tail=0.45), 0.5))
 
+# --- happy.wav: floración cálida — acorde mayor desafinado que respira + chispas de
+#     cristal esparcidas. (~1.8s)
+sparks = mix(*[(fm_bell(f, 0.5, ratio=3.7, index=1.6, decay=6.0) * 0.16, off)
+               for f, off in ((2093, 0.42), (2637, 0.61), (3136, 0.83))])
+happy = mix(
+    (pad([392, 494, 587, 784], 1.5, vib_hz=5.2, vib_amt=0.004) * env_swell(1.5, 0.45, 0.6) * 0.7, 0.0),
+    (sub(60, 49, 0.9, decay=2.5) * 0.35, 0.0),
+    (sparks, 0.0),
+)
+write_wav(OUT / "happy.wav", master(reverb(happy, wet=0.45, size=1.1, tail=1.0), 0.6))
 
-def silence(dur): return [0.0] * int(SR * dur)
+# --- glitch.wav: desgarro digital — textura granulada + sub impacto + zap descendente.
+#     El bitcrush va DENTRO de la textura, no crudo. (~0.8s)
+tex = pad([220, 227, 331], 0.6, voices=4, detune=0.012)
+g = grains(tex, 0.55, g_ms=(12, 38), seed=13)
+from sfx_kit import bitcrush
+g = 0.6 * g + 0.4 * bitcrush(g, bits=5, down=6)
+glitch = mix(
+    (sub(70, 32, 0.35, decay=6.0) * 0.9, 0.0),
+    (g * env_exp(0.55, 0.002, 3.0) * 0.85, 0.01),
+    (noise_sweep(0.4, 6000, 300, q=2.0) * env_exp(0.4, 0.002, 6) * 0.4, 0.0),
+)
+write_wav(OUT / "glitch.wav", master(reverb(glitch, wet=0.22, size=0.7, tail=0.4), 0.62))
 
+# --- teleport.wav: carga (riser) -> hueco de silencio -> IMPACTO sub -> disipación de
+#     cristal con cola larga. La gramática cinematográfica completa. (~2.1s)
+charge = mix(
+    (noise_sweep(0.72, 250, 9000, q=2.2, curve=1.6) * env_swell(0.72, 0.6, 0.06) * 0.6, 0.0),
+    (sine_sweep(180, 1500, 0.72, curve=1.8) * env_swell(0.72, 0.5, 0.05) * 0.3, 0.0),
+)
+impact = mix(
+    (sub(90, 30, 0.7, decay=3.5, drive=2.8), 0.0),
+    (noise_sweep(0.5, 4000, 150, q=1.5) * env_exp(0.5, 0.001, 5) * 0.5, 0.0),
+)
+shimmer = pad([1568, 1976, 2349], 0.9, detune=0.006) * env_exp(0.9, 0.01, 3.0) * 0.3
+tele = mix((charge, 0.0), (impact, 0.80), (shimmer, 0.84))   # 0.72-0.80: el hueco dramático
+write_wav(OUT / "teleport.wav", master(reverb(tele, wet=0.4, size=1.2, tail=1.1), 0.72))
 
-def mix_at(base, add, at):
-    i0 = int(SR * at)
-    for i, s in enumerate(add):
-        if i0 + i < len(base):
-            base[i0 + i] += s
+# --- heartbeat.wav: lub-dub de sub PROFUNDO con aire de sala. (~1.0s)
+def thump(vol):
+    return sub(58, 34, 0.22, decay=8.0, drive=2.6) * vol
+hb = mix((thump(1.0), 0.0), (thump(0.62), 0.30))
+write_wav(OUT / "heartbeat.wav", master(reverb(hb, wet=0.16, size=0.9, tail=0.5), 0.68))
 
+# --- sleep.wav: apagado — el pad se cierra (paso-bajo que baja), el sub se despide,
+#     un último cristal grave y silencio. (~2.4s)
+fade_pad = lowpass_sweep(pad([440, 330, 277], 1.7) * env_swell(1.7, 0.15, 0.9), 4500, 220) * 0.7
+slp = mix(
+    (fade_pad, 0.0),
+    (sub(52, 26, 1.6, decay=1.8) * 0.5, 0.1),
+    (fm_bell(330, 1.2, ratio=1.99, index=1.2, decay=2.5) * 0.3, 1.0),
+)
+write_wav(OUT / "sleep.wav", master(reverb(slp, wet=0.45, size=1.3, tail=1.2), 0.55))
 
-def synth_note(freq, dur, vol=1.0, detune=1.003, decay=5.0):
-    """Nota synth: 2 sierras suaves desafinadas (súper-saw ligera) con decay."""
-    n = int(SR * dur)
-    out, p1, p2 = [], 0.0, 0.0
-    for i in range(n):
-        t = i / n
-        p1 = (p1 + freq / SR) % 1.0
-        p2 = (p2 + freq * detune / SR) % 1.0
-        saw = (p1 - 0.5) * 0.6 + (p2 - 0.5) * 0.4
-        soft = saw - saw ** 3 / 3           # suaviza la sierra (menos áspera)
-        env = min(1.0, i / (SR * 0.008)) * math.exp(-decay * t)
-        out.append(soft * env * vol)
-    return out
-
-
-def noise_lp(dur, c0, c1):
-    n = int(SR * dur)
-    out, y = [], 0.0
-    for i in range(n):
-        fc = c0 + (c1 - c0) * (i / n)
-        a = 1.0 - math.exp(-2 * math.pi * fc / SR)
-        y += a * (random.uniform(-1, 1) - y)
-        out.append(y)
-    return out
-
-
-print(f"Sintetizando sonidos de Nyx en {OUT}")
-
-# --- boot.wav: arranque del sistema — arpegio ascendente + shimmer ---
-s = silence(1.4)
-for k, (f, at) in enumerate([(220, 0.0), (330, 0.14), (440, 0.28), (660, 0.42), (880, 0.56)]):
-    mix_at(s, synth_note(f, 0.5, vol=0.7 + k * 0.06, decay=4), at)
-mix_at(s, [v * 0.10 * math.sin(i / SR * 2 * math.pi * 6) for i, v in enumerate(noise_lp(0.7, 6000, 9000))], 0.62)
-write_wav("boot.wav", s, gain=0.55)
-
-# --- blip.wav: blip de interfaz (curiosidad / toque) ---
-s = synth_note(1245, 0.09, decay=9)
-mix_at(s, synth_note(1660, 0.06, vol=0.5, decay=10), 0.03)
-write_wav("blip.wav", s, gain=0.4)
-
-# --- happy.wav: acorde cálido breve (caricia que le gusta) ---
-s = silence(0.9)
-for f, at, v in [(523, 0.0, 0.8), (659, 0.05, 0.7), (784, 0.10, 0.75), (1047, 0.18, 0.5)]:
-    mix_at(s, synth_note(f, 0.65, vol=v, decay=3.5), at)
-write_wav("happy.wav", s, gain=0.45)
-
-# --- glitch.wav: zap de glitch — ruido troceado con AM metálica ---
-n = int(SR * 0.38)
-s = []
-for i in range(n):
-    t = i / n
-    seg = int(t * 9)
-    on = (seg * 2654435761 % 7) > 2          # troceado pseudoaleatorio determinista
-    am = 0.5 + 0.5 * math.sin(2 * math.pi * 87 * i / SR)
-    s.append((random.uniform(-1, 1) * 0.8 + math.sin(2 * math.pi * 440 * (1 + 2 * t) * i / SR) * 0.3)
-             * (1.0 if on else 0.12) * am * math.exp(-2.2 * t))
-write_wav("glitch.wav", s, gain=0.5)
-
-# --- teleport.wav: desmaterializa (barrido abajo) + rematerializa (arriba) ---
-s = silence(0.85)
-dn, ph = [], 0.0
-for i in range(int(SR * 0.35)):
-    t = i / (SR * 0.35)
-    f = 900 * (1 - 0.85 * t)
-    ph += 2 * math.pi * f / SR
-    dn.append(math.sin(ph) * (1 - t) * 0.9)
-mix_at(s, dn, 0.0)
-up, ph = [], 0.0
-for i in range(int(SR * 0.4)):
-    t = i / (SR * 0.4)
-    f = 200 + 1100 * t * t
-    ph += 2 * math.pi * f / SR
-    up.append(math.sin(ph) * math.sin(math.pi * t) * 0.8)
-mix_at(s, up, 0.42)
-mix_at(s, [v * 0.25 for v in noise_lp(0.2, 3000, 800)], 0.36)
-write_wav("teleport.wav", s, gain=0.5)
-
-# --- heartbeat.wav: lub-dub sintético grave (sobresalto, sutil) ---
-s = silence(0.7)
-for at, v in [(0.0, 1.0), (0.16, 0.75)]:
-    th, ph = [], 0.0
-    for i in range(int(SR * 0.14)):
-        t = i / (SR * 0.14)
-        f = 62 - 18 * t
-        ph += 2 * math.pi * f / SR
-        th.append(math.sin(ph) * math.exp(-7 * t) * v)
-    mix_at(s, th, at)
-write_wav("heartbeat.wav", s, gain=0.55)
-
-# --- sleep.wav: apagado de pantalla (acorde descendente + hum que muere) ---
-s = silence(1.1)
-for f, at in [(660, 0.0), (440, 0.15), (330, 0.30), (220, 0.45)]:
-    mix_at(s, synth_note(f, 0.5, vol=0.6, decay=5), at)
-mix_at(s, [0.18 * math.sin(2 * math.pi * 110 * i / SR) * math.exp(-3 * i / SR) for i in range(int(SR * 0.9))], 0.35)
-write_wav("sleep.wav", s, gain=0.4)
-
-print("listo")
+print("listo — diseño por capas + reverb, cero Atari")
