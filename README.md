@@ -61,18 +61,20 @@ para no consumir recursos de más. Detalle técnico en [`docs/ARCHITECTURE.md`](
 
 ## Skins / personajes
 
-Vienen **10 skins** incluidas (Kira violeta, Ember fuego, Aqua océano, Verde, Dorada, Sombra,
-Rosa, Nieve, Lava, Menta) — **elígelas desde el menú ⚙ → Aspecto → Skin**, con cambio en vivo.
-Son arte procedural de relleno generado por `tools/make_skins.py` (regenéralas con
-`python tools/make_skins.py`).
+Incluye **41 skins** seleccionables desde el menú ⚙ → Aspecto → Skin (cambio en vivo): desde
+criaturas kawaii con voz temática hasta las tres joyas de la corona —
+**Nyx** 💠 (humana cyberpunk *hiperrealista*: te sonríe si la acaricias, glitchea y se
+teletransporta si la molestas), **Otto** 🐙 (pulpo LEGO 3D con etología real: cromatóforos,
+tinta de piezas y camuflaje con tu escritorio) y **Vivi** 🌸 (waifu anime 3D VRM). Todas con
+caricias por mouse, reacciones a tu actividad, sonidos de su mundo y personalidad propia.
 
-Para crear el tuyo: copia `characters/kira/` a `characters/<tu-personaje>/`, renombra y edita el
+Para crear el tuyo, lo simple: copia `characters/kira/` a `characters/<tu-personaje>/`, edita el
 `.json` (animaciones, voz, personalidad), reemplaza los sprites por tu arte (sprite sheet de
 6×128px por estado) y añádelo a `characters/skins.json`. Aparecerá en el selector.
 
-Para mascotas hiperrealistas por partes, usa el formato de Averno v3 (`dragonRigV3`). Esta ruta
-separa cuerpo, cabeza, alas, patas, cola, brillos y fuego con pivotes declarados en el manifest.
-Detalle técnico: [`docs/DRAGON_RIGS.md`](docs/DRAGON_RIGS.md).
+Para diseñar una pet completa (2.5D por partes, 3D procedural, VRM o hiperrealista con motor de
+comportamiento y sonido cinematográfico): la guía maestra con las cinco recetas está en
+[`docs/GUIA_DISENO_PETS.md`](docs/GUIA_DISENO_PETS.md).
 
 ## Licencia
 
