@@ -44,9 +44,13 @@ PanelWindow {
     property bool _greetReady: true       // cooldown del saludo hablado
     Timer { id: greetCooldown; interval: 45000; onTriggered: root._greetReady = true }
 
-    // Comentario espontáneo (vista automática): texto que aparece en un globo sobre la pet y se va solo.
+    // Comentario espontáneo (vista automática / reacciones): globo sobre la pet que se va solo.
+    // Duración proporcional al texto (leer 2 líneas no cabe en el mismo tiempo que un "Zzz…").
     property string bubbleText: ""
-    onBubbleTextChanged: if (bubbleText !== "") bubbleHide.restart()
+    onBubbleTextChanged: if (bubbleText !== "") {
+        bubbleHide.interval = Math.min(14000, 4000 + bubbleText.length * 45);
+        bubbleHide.restart();
+    }
     Timer { id: bubbleHide; interval: 9000; onTriggered: root.bubbleText = "" }
 
     // Estado efectivo del sprite: hablar (voz o texto) > override > contexto.

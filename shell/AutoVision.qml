@@ -87,6 +87,10 @@ Scope {
             + "Mira la captura y suelta UN comentario corto y espontáneo, con tu personalidad, sobre algo "
             + "concreto que veas. Una sola frase, máximo 14 palabras. No saludes ni expliques que estás "
             + "mirando. Si no hay nada que valga la pena comentar, responde EXACTAMENTE: [silencio]";
+        // pista de contexto: mejora la relevancia del comentario sin gastar tokens de visión
+        var hint = ({ "music": "escuchando música", "watching": "viendo un video",
+                      "typing": "escribiendo", "browsing": "navegando" })[contextState];
+        if (hint) prompt += " Contexto: tu humano está " + hint + ".";
         if (_lastRemark.length > 0)
             prompt += " Hace poco dijiste: \"" + _lastRemark + "\" — no repitas eso ni algo parecido.";
 

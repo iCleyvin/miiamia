@@ -32,6 +32,8 @@ PanelWindow {
     property string recModelLabel: "Qwen3-4B (alineado) ✓"
     property string aiInfo: "—"
     property bool open: false
+    property bool reactionsOn: true    // reacciona al cambiar de actividad (local, instantáneo)
+    property bool autoVisionOn: false  // mira la pantalla sola y comenta (cerebro con visión)
 
     // --- Señales que aplica shell.qml ---
     signal setScale(real v)
@@ -47,6 +49,8 @@ PanelWindow {
     signal setBaseUrl(string v)
     signal setModel(string v)
     signal setToolsEnabled(bool v)
+    signal setReactions(bool v)
+    signal setAutoVision(bool v)
     signal redetect()
 
     readonly property string _tools: Quickshell.shellDir + "/../tools"
@@ -283,6 +287,30 @@ PanelWindow {
                             text: "↩ La del personaje"
                             visible: win.persona !== "" || personaArea.text !== ""
                             onClicked: { personaArea.text = ""; win.setPersona(""); win.status = "Cada personaje usa su personalidad ✓"; }
+                        }
+                    }
+                }
+
+                // ---- Vida propia ----
+                Text { text: "VIDA PROPIA"; color: "#a78cff"; font.pixelSize: 12; font.bold: true }
+                Column {
+                    width: parent.width; spacing: 2
+                    Row {
+                        width: parent.width; spacing: 6
+                        Switch { checked: win.reactionsOn; onToggled: win.setReactions(checked) }
+                        Text {
+                            text: "Reacciona al instante al cambiar de actividad (juego, música, video…)"
+                            color: "#cfc7e8"; font.pixelSize: 13; wrapMode: Text.Wrap
+                            width: parent.width - 70; anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    Row {
+                        width: parent.width; spacing: 6
+                        Switch { checked: win.autoVisionOn; onToggled: win.setAutoVision(checked) }
+                        Text {
+                            text: "Mira tu pantalla sola cada pocos minutos y comenta (cerebro con visión)"
+                            color: "#cfc7e8"; font.pixelSize: 13; wrapMode: Text.Wrap
+                            width: parent.width - 70; anchors.verticalCenter: parent.verticalCenter
                         }
                     }
                 }
