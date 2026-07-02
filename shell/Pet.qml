@@ -20,7 +20,7 @@ PanelWindow {
     // Un typo en manifest.backend cae en silencio al SpriteBackend (fallback); avisar en el log.
     onPetDataChanged: {
         var b = petData ? petData.backend : undefined;
-        if (b !== undefined && ["sprite", "rig", "dragonRig", "dragonRigV2", "dragonRigV3", "model3d", "octopusLego", "live2d"].indexOf(b) < 0)
+        if (b !== undefined && ["sprite", "rig", "dragonRig", "dragonRigV2", "dragonRigV3", "model3d", "octopusLego", "cyberHuman", "live2d"].indexOf(b) < 0)
             console.warn("miiamia[pet]: backend desconocido '" + b + "' en el manifest; uso sprite");
     }
     property string contextState: "idle" // estado calculado por ContextEngine (M2)
@@ -153,6 +153,7 @@ PanelWindow {
         readonly property bool isDragonRigV3: root.petData.backend === "dragonRigV3"
         readonly property bool isModel3d: root.petData.backend === "model3d"
         readonly property bool isOctopus: root.petData.backend === "octopusLego"
+        readonly property bool isCyber: root.petData.backend === "cyberHuman"
         readonly property var _m3d: root.petData.model3d !== undefined ? root.petData.model3d : null
         readonly property var _view: root.petData.view !== undefined ? root.petData.view : null
         readonly property real _scaleEff: root.scaleOverride > 0 ? root.scaleOverride
@@ -160,11 +161,11 @@ PanelWindow {
         // model3d (waifu 3D): rect alto tipo persona (w/h del manifest, escalado por _scaleEff sobre base 2.0)
         width: root.isLive2d ? (root.live2dConf && root.live2dConf.w ? root.live2dConf.w : 360)
                : avatar.isModel3d ? ((avatar._m3d && avatar._m3d.w ? avatar._m3d.w : 380) * (_scaleEff / 2.0))
-               : avatar.isOctopus ? ((avatar._view && avatar._view.w ? avatar._view.w : 470) * (_scaleEff / 2.0))
+               : (avatar.isOctopus || avatar.isCyber) ? ((avatar._view && avatar._view.w ? avatar._view.w : 470) * (_scaleEff / 2.0))
                : 128 * _scaleEff
         height: root.isLive2d ? (root.live2dConf && root.live2dConf.h ? root.live2dConf.h : 500)
                : avatar.isModel3d ? ((avatar._m3d && avatar._m3d.h ? avatar._m3d.h : 560) * (_scaleEff / 2.0))
-               : avatar.isOctopus ? ((avatar._view && avatar._view.h ? avatar._view.h : 430) * (_scaleEff / 2.0))
+               : (avatar.isOctopus || avatar.isCyber) ? ((avatar._view && avatar._view.h ? avatar._view.h : 430) * (_scaleEff / 2.0))
                : 128 * _scaleEff
 
         // Posicion inicial: abajo-derecha, sobre el "suelo" de la pantalla.
@@ -195,6 +196,7 @@ PanelWindow {
             anchors.fill: parent
             sourceComponent: root.isLive2d ? null
                 : avatar.isOctopus ? octopusComp
+                : avatar.isCyber ? cyberComp
                 : avatar.isModel3d ? model3dComp
                 : avatar.isDragonRigV3 ? dragonRigV3Comp
                 : avatar.isDragonRigV2 ? dragonRigV2Comp
@@ -263,6 +265,31 @@ PanelWindow {
                 voiceAmplitude: root.voiceAmplitude
                 headYaw: root.headYaw
                 headPitch: root.headPitch
+            }
+        }
+        // Nyx — humana cyberpunk HIPERREALISTA (retrato SDXL + parches inpainted sin costura).
+        // Caricias por hover; susto = glitch RGB + teletransporte (jetEscape -> _dashAway).
+        Component {
+            id: cyberComp
+            CyberHumanBackend {
+                characterDir: root.characterDir
+                config: root.petData.human !== undefined ? root.petData.human : null
+                scale: avatar._scaleEff
+                currentState: root.state
+                talking: root.talking
+                voiceAmplitude: root.voiceAmplitude
+                voiceState: root.voiceState
+                headYaw: root.headYaw
+                headPitch: root.headPitch
+                cursorNear: root.cursorNear
+                cursorProximity: root.cursorProximity
+                monitorName: root.screen && root.screen.name ? root.screen.name : root.monitorName
+                petActive: petTouch.containsMouse
+                petX: root._petX
+                petY: root._petY
+                petSpeed: root._petSpeed
+                held: dragArea.dragging
+                onJetEscape: root._dashAway()
             }
         }
         // Otto — pulpo LEGO 3D con etología real (docs/OTTO_PULPO.md). Caricias por hover,
@@ -341,7 +368,7 @@ PanelWindow {
             id: petTouch
             anchors.fill: parent
             acceptedButtons: Qt.NoButton
-            hoverEnabled: avatar.isOctopus
+            hoverEnabled: avatar.isOctopus || avatar.isCyber
             property real _lx: 0
             property real _ly: 0
             property double _lt: 0
@@ -420,7 +447,7 @@ PanelWindow {
             // skins sprite/kawaii, para las que fueron diseñados.
             property bool shown: cfg !== null && root.voiceState === "idle" && !root.talking && !root.isLive2d
                                  && !avatar.isDragonRig && !avatar.isDragonRigV2 && !avatar.isDragonRigV3
-                                 && !avatar.isModel3d && !avatar.isOctopus
+                                 && !avatar.isModel3d && !avatar.isOctopus && !avatar.isCyber
             visible: shown
             source: cfg ? root.propsDir + cfg.p + ".png" : ""
             width: cfg ? parent.width * cfg.s : 0
@@ -555,12 +582,12 @@ PanelWindow {
                 root.headPitch = Math.max(-1, Math.min(1, dy / 520));
                 var nx = dx / Math.max(1, avatar.width * 1.15);
                 var ny = dy / Math.max(1, avatar.height * 0.95);
-                root.cursorProximity = (avatar.isModel3d || avatar.isOctopus)
+                root.cursorProximity = (avatar.isModel3d || avatar.isOctopus || avatar.isCyber)
                         ? Math.max(0, Math.min(1, 1 - Math.sqrt(nx*nx + ny*ny))) : 0;
                 // proximidad: el cursor esta "cerca" si cae sobre/junto al cuerpo de la pet
                 var near = (Math.abs(dx) < avatar.width * 0.9)
                         && (dy > -avatar.height * 0.62) && (dy < avatar.height * 0.55);
-                if (near && !root.cursorNear && (avatar.isModel3d || avatar.isOctopus) && root._greetReady) {
+                if (near && !root.cursorNear && (avatar.isModel3d || avatar.isOctopus || avatar.isCyber) && root._greetReady) {
                     root._greetReady = false; greetCooldown.restart();
                     root.petApproached();          // -> saludo por voz + globo (shell.qml)
                 }
@@ -572,7 +599,7 @@ PanelWindow {
         interval: 110
         // model3d tambien sigue el cursor (mirada) y ademas cuando esta "sleeping" (para despertar al acercarse)
         running: ((avatar.isRig || avatar.isDragonRig || avatar.isDragonRigV2 || avatar.isDragonRigV3) && root.state !== "gaming" && root.state !== "sleeping")
-                 || ((avatar.isModel3d || avatar.isOctopus) && root.state !== "gaming")
+                 || ((avatar.isModel3d || avatar.isOctopus || avatar.isCyber) && root.state !== "gaming")
         repeat: true
         onTriggered: if (!cursorProc.running) cursorProc.running = true
         // Al parar el polling (p.ej. entra un juego), resetear: si no, la pet 3D se queda con la

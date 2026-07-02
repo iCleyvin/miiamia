@@ -45,6 +45,15 @@ def _fx_filtergraph(name: str, sr: int):
             "aecho=0.9:0.55:22:0.16,"
             "volume=1.2,alimiter=limit=0.95[out]"
         ).format(sr=sr)
+    if name == "cyber":
+        # Voz SINTÉTICA cyberpunk (Nyx): timbre metálico por AM rápida (tremolo a ~65Hz),
+        # doble voz muy junta (chorus corto), brillo digital y un eco seco de sala pequeña.
+        return (
+            "[0:a]chorus=0.7:0.9:12|18:0.42|0.38:0.6|0.5:0.8|0.7[p];"
+            "[p]tremolo=f=65:d=0.22,treble=g=5:f=4500,highpass=f=120,"
+            "aecho=0.75:0.4:18:0.18,"
+            "volume=1.25,alimiter=limit=0.95[out]"
+        )
     if name == "bubble":
         # Voz SUBMARINA (Otto el pulpo): apagada como bajo el agua (paso-bajo), con un
         # wobble líquido (chorus) y un eco corto de tanque. Tono casi neutro (-4%).
