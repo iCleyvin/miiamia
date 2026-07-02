@@ -45,6 +45,16 @@ def _fx_filtergraph(name: str, sr: int):
             "aecho=0.9:0.55:22:0.16,"
             "volume=1.2,alimiter=limit=0.95[out]"
         ).format(sr=sr)
+    if name == "bubble":
+        # Voz SUBMARINA (Otto el pulpo): apagada como bajo el agua (paso-bajo), con un
+        # wobble líquido (chorus) y un eco corto de tanque. Tono casi neutro (-4%).
+        return (
+            "[0:a]asetrate={sr}*0.96,aresample={sr},atempo=1.0417[p];"
+            "[p]lowpass=f=2500,bass=g=3:f=200,"
+            "chorus=0.6:0.9:45|55:0.32|0.28:0.5|0.4:1.8|1.4,"
+            "aecho=0.8:0.55:35|90:0.25|0.14,"
+            "volume=1.35,alimiter=limit=0.95[out]"
+        ).format(sr=sr)
     if name == "ghost":
         # Voz ETÉREA (fantasmas/fénix): un toque más aguda y con "aire", eco largo y suave
         # (presencia que flota), sin graves (los cuerpos etéreos no tienen pecho).
