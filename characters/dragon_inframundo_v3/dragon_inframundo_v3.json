@@ -1,0 +1,110 @@
+{
+  "name": "Averno v3",
+  "backend": "dragonRigV3",
+  "scale": 2.2,
+  "defaultState": "idle",
+  "rig": {
+    "format": "multipart-dragon-v1",
+    "size": 512,
+    "parts": {
+      "tail": "sprites/dragon_rig/tail.png",
+      "wing_l": "sprites/dragon_rig/wing_l.png",
+      "wing_r": "sprites/dragon_rig/wing_r.png",
+      "hind_legs": "sprites/dragon_rig/hind_legs.png",
+      "body": "sprites/dragon_rig/body.png",
+      "front_legs": "sprites/dragon_rig/front_legs.png",
+      "head": "sprites/dragon_rig/head.png",
+      "chest_glow": "sprites/dragon_rig/chest_glow.png",
+      "eye_glow": "sprites/dragon_rig/eye_glow.png",
+      "mouth_glow": "sprites/dragon_rig/mouth_glow.png",
+      "fire_breath": "sprites/dragon_rig/fire_breath.png"
+    },
+    "fire": {
+      "fps": 18,
+      "frames": [
+        "sprites/dragon_rig/fire_breath_0.png",
+        "sprites/dragon_rig/fire_breath_1.png",
+        "sprites/dragon_rig/fire_breath_2.png",
+        "sprites/dragon_rig/fire_breath_3.png",
+        "sprites/dragon_rig/fire_breath_4.png",
+        "sprites/dragon_rig/fire_breath_5.png",
+        "sprites/dragon_rig/fire_breath_6.png",
+        "sprites/dragon_rig/fire_breath_7.png"
+      ]
+    },
+    "pivots": {
+      "tail": { "x": 0.66, "y": 0.73 },
+      "wing_l": { "x": 0.29, "y": 0.35 },
+      "wing_r": { "x": 0.60, "y": 0.31 },
+      "hind_legs": { "x": 0.60, "y": 0.78 },
+      "body": { "x": 0.38, "y": 0.78 },
+      "front_legs": { "x": 0.28, "y": 0.79 },
+      "head": { "x": 0.30, "y": 0.42 }
+    }
+  },
+  "animations": {
+    "idle": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "typing": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "gaming": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "browsing": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "talking": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "sleeping": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "watching": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    },
+    "music": {
+      "source": "sprites/idle.png",
+      "frameCount": 1,
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 1
+    }
+  },
+  "voice": {
+    "tts": "piper",
+    "voice": "es_AR-daniela-high",
+    "fx": "infernal",
+    "length_scale": 1.35
+  },
+  "persona": "Eres Averno, un dragon infernal antiguo que vive en la pantalla de tu humano. Hablas espanol dominicano, con presencia oscura, protectora y directa. Eres intenso pero leal; respondes breve, como una criatura sabia venida del inframundo."
+}
