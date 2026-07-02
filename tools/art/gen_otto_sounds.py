@@ -1,139 +1,92 @@
 #!/usr/bin/env python3
-"""Sintetiza los sonidos del mundo de Otto (pulpo LEGO) — stdlib puro, sin samples.
+"""Diseño sonoro CINEMATOGRÁFICO submarino de Otto (pulpo LEGO) — sfx_kit (numpy+scipy).
 
-El pulpo no vocaliza: su mundo suena a agua. Burbujas = chirps senoidales ascendentes con
-resonancia; sifón = ráfaga de ruido filtrado (paso-bajo con barrido); tinta = golpe sordo
-grave + puff de ruido. Salida: characters/pulpo_lego/sounds/*.wav (22050 Hz, mono, s16).
+El agua manda: las burbujas usan resonancia tipo Minnaert (senoide decayente con glide
+ascendente + armónico + transitorio de formación), los agudos se los traga el agua
+(paso-bajo global) y todo vive en una reverb de tanque oscura. Nada de sine chirps a pelo.
 
-Uso: python tools/art/gen_otto_sounds.py
+Correr con el venv de arte:
+  ~/miiamia-art/.venv/bin/python tools/art/gen_otto_sounds.py
 """
 from __future__ import annotations
 
-import math
-import random
-import struct
-import wave
+import sys
 from pathlib import Path
 
-SR = 22050
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import numpy as np
+from scipy import signal
+from sfx_kit import (SR, env_exp, env_swell, master, mix, noise_sweep, pad, reverb,
+                     sine_sweep, sub, t_axis, write_wav)
+
 OUT = Path(__file__).resolve().parents[2] / "characters" / "pulpo_lego" / "sounds"
-random.seed(8)  # ocho brazos: sonidos reproducibles
+OUT.mkdir(parents=True, exist_ok=True)
+print(f"Diseño sonoro submarino de Otto -> {OUT}")
+
+rng = np.random.default_rng(8)
 
 
-def write_wav(name: str, samples: list[float], gain: float = 0.85):
-    peak = max(1e-9, max(abs(s) for s in samples))
-    norm = gain / peak
-    data = b"".join(struct.pack("<h", int(max(-1.0, min(1.0, s * norm)) * 32767)) for s in samples)
-    OUT.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(OUT / name), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(SR)
-        w.writeframes(data)
-    print(f"  ✓ {name} ({len(samples)/SR:.2f}s)")
+def bubble(f0: float, dur: float = 0.22, glide: float = 1.6, vol: float = 1.0) -> np.ndarray:
+    """Burbuja física (Minnaert): senoide decayente cuyo tono SUBE al encoger la burbuja,
+    con 2º armónico suave y un transitorio de formación (plip de agua)."""
+    t = t_axis(dur)
+    f = f0 * (1 + (glide - 1) * (t / dur) ** 0.65)
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    body = (np.sin(ph) + 0.22 * np.sin(2 * ph + 0.7)) * env_exp(dur, 0.003, 5.5)
+    plip = noise_sweep(0.03, 1200, 3500, q=2.0) * env_exp(0.03, 0.001, 30) * 0.4
+    return mix((body * vol, 0.0), (plip * vol, 0.0))
 
 
-def silence(dur: float) -> list[float]:
-    return [0.0] * int(SR * dur)
+def water(x: np.ndarray, wet: float = 0.35, cutoff: float = 2800, tail: float = 0.8) -> np.ndarray:
+    """Acústica de agua: el agua se traga los agudos + reverb de tanque oscura."""
+    sos = signal.butter(2, cutoff, "lowpass", fs=SR, output="sos")
+    return reverb(signal.sosfilt(sos, x), wet=wet, size=0.9, damp=0.6, tail=tail)
 
 
-def bubble(f0: float, f1: float, dur: float, vol: float = 1.0) -> list[float]:
-    """Una burbuja: chirp ascendente (la burbuja sube y encoge -> sube el tono) con decay."""
-    n = int(SR * dur)
-    out, ph = [], 0.0
-    for i in range(n):
-        t = i / n
-        f = f0 + (f1 - f0) * (t ** 0.7)
-        ph += 2 * math.pi * f / SR
-        env = math.sin(min(1.0, t * 12) * math.pi / 2) * math.exp(-3.2 * t)
-        out.append(math.sin(ph) * env * vol)
-    return out
+# --- pop.wav: UNA burbuja curiosa con cuerpo (primer contacto) ---
+write_wav(OUT / "pop.wav", master(water(bubble(340, 0.24, 2.1), wet=0.3, tail=0.5), 0.5))
 
+# --- hello.wav: dos burbujas alegres que conversan ---
+hello = mix((bubble(320, 0.22, 2.0), 0.0), (bubble(430, 0.24, 2.2, 0.9), 0.20))
+write_wav(OUT / "hello.wav", master(water(hello, wet=0.35, tail=0.6), 0.52))
 
-def mix_at(base: list[float], add: list[float], at: float):
-    i0 = int(SR * at)
-    for i, s in enumerate(add):
-        j = i0 + i
-        if j < len(base):
-            base[j] += s
+# --- happy.wav: trino de burbujas ascendentes + brillo de agua (caricia que encanta) ---
+trill = mix(*[(bubble(260 + 55 * k, 0.2, 2.0, 0.75 + 0.04 * k), 0.11 * k) for k in range(7)])
+shimmer = pad([1245, 1567], 0.9, detune=0.008, vib_hz=6.0, vib_amt=0.006) \
+          * env_swell(0.9, 0.3, 0.5) * 0.14
+happy = mix((trill, 0.0), (shimmer, 0.25), (sub(70, 55, 0.6, decay=3.0) * 0.25, 0.0))
+write_wav(OUT / "happy.wav", master(water(happy, wet=0.4, cutoff=3400, tail=0.9), 0.55))
 
+# --- jet.wav: sifón a presión — empuje sub + ráfaga de agua (whoosh grave, no estática) ---
+jet = mix(
+    (sub(85, 34, 0.5, decay=4.0, drive=2.6) * 0.9, 0.0),
+    (noise_sweep(0.6, 1800, 220, q=1.4) * env_exp(0.6, 0.004, 4.0) * 0.8, 0.0),
+    (noise_sweep(0.35, 500, 120, q=1.8) * env_exp(0.35, 0.002, 5.0) * 0.5, 0.02),
+)
+write_wav(OUT / "jet.wav", master(water(jet, wet=0.28, cutoff=2200, tail=0.6), 0.62))
 
-def noise_lp(dur: float, cutoff0: float, cutoff1: float) -> list[float]:
-    """Ruido blanco con paso-bajo de 1 polo cuyo corte barre cutoff0 -> cutoff1."""
-    n = int(SR * dur)
-    out, y = [], 0.0
-    for i in range(n):
-        t = i / n
-        fc = cutoff0 + (cutoff1 - cutoff0) * t
-        a = 1.0 - math.exp(-2 * math.pi * fc / SR)
-        y += a * (random.uniform(-1, 1) - y)
-        out.append(y)
-    return out
+# --- ink.wav: pseudomorfo — golpe sordo profundo + nube turbia que se expande ---
+ink = mix(
+    (sub(95, 30, 0.5, decay=4.5, drive=2.8), 0.0),
+    (noise_sweep(0.55, 900, 150, q=1.2) * env_swell(0.55, 0.06, 0.35) * 0.55, 0.02),
+    (bubble(140, 0.3, 1.5, 0.4), 0.18),   # borboteo grave dentro de la nube
+)
+write_wav(OUT / "ink.wav", master(water(ink, wet=0.3, cutoff=1600, tail=0.7), 0.6))
 
+# --- startle.wav: ¡glup! — burbuja asustada descendente + mini-sub ---
+gulp_t = t_axis(0.18)
+gulp_f = 720 * (1 - 0.6 * (gulp_t / 0.18) ** 0.8)
+gulp = np.sin(2 * np.pi * np.cumsum(gulp_f) / SR) * env_exp(0.18, 0.002, 6.0)
+st = mix((gulp, 0.0), (sub(90, 50, 0.15, decay=9.0) * 0.5, 0.0), (bubble(500, 0.12, 1.3, 0.3), 0.05))
+write_wav(OUT / "startle.wav", master(water(st, wet=0.25, tail=0.4), 0.55))
 
-def env_apply(sig: list[float], attack: float, release: float) -> list[float]:
-    n = len(sig)
-    na, nr = max(1, int(SR * attack)), max(1, int(SR * release))
-    for i in range(n):
-        e = 1.0
-        if i < na:
-            e = i / na
-        if i > n - nr:
-            e = min(e, (n - i) / nr)
-        sig[i] *= e
-    return sig
+# --- sleep.wav: dos burbujas lentas y graves + arrullo de agua que se apaga ---
+lull = pad([98, 147], 1.6, detune=0.01, vib_hz=0.8, vib_amt=0.01) * env_swell(1.6, 0.4, 0.9) * 0.3
+slp = mix(
+    (bubble(150, 0.5, 1.5, 0.9), 0.0),
+    (bubble(120, 0.55, 1.4, 0.6), 0.55),
+    (lull, 0.1),
+)
+write_wav(OUT / "sleep.wav", master(water(slp, wet=0.45, cutoff=1400, tail=1.0), 0.45))
 
-
-print(f"Sintetizando sonidos de Otto en {OUT}")
-
-# --- pop.wav: una burbujita suelta (primer contacto, curiosidad) ---
-write_wav("pop.wav", bubble(340, 780, 0.14), gain=0.5)
-
-# --- happy.wav: trino de burbujas ascendentes (caricia que le encanta) ---
-s = silence(1.0)
-for k, at in enumerate([0.0, 0.12, 0.22, 0.34, 0.50, 0.68]):
-    mix_at(s, bubble(300 + 70 * k, 700 + 140 * k, 0.16, vol=0.8 + 0.05 * k), at)
-write_wav("happy.wav", s, gain=0.55)
-
-# --- jet.wav: sifón a presión (huida a chorro): whoosh de ruido con barrido ---
-s = noise_lp(0.55, 2600, 350)
-n = len(s)
-for i in range(n):  # envolvente de ráfaga: golpe rápido y cola
-    t = i / n
-    s[i] *= math.exp(-2.4 * t) * min(1.0, t * 30)
-write_wav("jet.wav", env_apply(s, 0.005, 0.1), gain=0.6)
-
-# --- ink.wav: pseudomorfo de tinta: thump grave + puff corto ---
-s = silence(0.5)
-th, ph = [], 0.0
-for i in range(int(SR * 0.35)):
-    t = i / (SR * 0.35)
-    f = 130 - 60 * t
-    ph += 2 * math.pi * f / SR
-    th.append(math.sin(ph) * math.exp(-6 * t))
-mix_at(s, th, 0.0)
-mix_at(s, [v * 0.35 * math.exp(-9 * i / SR / 0.2) for i, v in enumerate(noise_lp(0.2, 1400, 500))], 0.01)
-write_wav("ink.wav", s, gain=0.6)
-
-# --- startle.wav: respingo (chirp descendente rapidito, "¡glup!") ---
-sq, ph = [], 0.0
-for i in range(int(SR * 0.16)):
-    t = i / (SR * 0.16)
-    f = 900 - 620 * t
-    ph += 2 * math.pi * f / SR
-    sq.append(math.sin(ph) * math.exp(-4 * t))
-write_wav("startle.wav", env_apply(sq, 0.004, 0.03), gain=0.5)
-
-# --- sleep.wav: blub lento y grave (se queda dormido) ---
-s = silence(0.9)
-mix_at(s, bubble(160, 300, 0.4, vol=1.0), 0.0)
-mix_at(s, bubble(140, 250, 0.45, vol=0.6), 0.4)
-write_wav("sleep.wav", s, gain=0.45)
-
-# --- hello.wav: saludo burbujeante corto (2 burbujas alegres) ---
-s = silence(0.5)
-mix_at(s, bubble(350, 800, 0.15), 0.0)
-mix_at(s, bubble(450, 980, 0.16, vol=0.9), 0.18)
-write_wav("hello.wav", s, gain=0.5)
-
-print("listo")
+print("listo — acústica submarina por capas, cero Atari")
