@@ -110,6 +110,10 @@ Detalle completo en `docs/NYX_CYBER.md`. La esencia:
    `MultiEffect`. Que capture luz reflejada en la piel es CORRECTO (late con la fuente).
 5. Micro-etología humana: parpadeo estadístico (media ~4s, 12% dobles, cierre 55ms/apertura
    95ms), sacádicos instantáneos con histéresis, sway de 2 frecuencias, fidgets cada 20-50s.
+   **Sonrisas SIEMPRE cerradas (sin dientes)** en humanos realistas — la sonrisa con dientes
+   cae en el valle inquietante (feedback directo del usuario: "me da miedo"). Generar 3+
+   seeds de sonrisa y elegir la más suave. **Lip-sync**: nunca visemas por umbral crudo
+   (parpadea); amplitud suavizada (ataque 45ms/caída 130ms) + histéresis + hold de 90ms.
 6. Los límites técnicos se convierten en estética (glitch RGB, scanlines ENMASCARADAS a la
    silueta, boot, teletransporte).
 

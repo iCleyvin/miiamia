@@ -72,8 +72,11 @@ Item {
     // sonrisa: caricia que gusta, o placer alto sostenido
     readonly property bool _smiling: !sleeping && !escaping
         && ((petActive && petSpeed < 1.4 && pleasure > 0.55) || pleasure > 0.78)
-    // visemas por amplitud de voz (lip-sync de foto real)
-    readonly property int _viseme: !_speaking ? 0 : (voiceAmplitude > 0.5 ? 2 : (voiceAmplitude > 0.15 ? 1 : 0))
+    // lip-sync: NO por umbral crudo (parpadeaba entre visemas). Amplitud suavizada con
+    // ataque rápido/caída lenta + histéresis + hold mínimo de 90ms — se computa en _compose.
+    property real _mouthAmp: 0
+    property int _viseme: 0
+    property real _visemeAt: 0
 
     // ============================ ESCENARIO ============================
     // stage en píxeles FUENTE (832x1216): los parches usan coordenadas del PNG original.
@@ -247,13 +250,24 @@ Item {
         }
         if (held) { arousal = Math.min(1, arousal + dt * 0.3); _glitch = Math.max(_glitch, 0.15); }
 
+        // lip-sync suavizado: ataque 45ms, caída 130ms; visema con histéresis y hold de 90ms
+        var tgt = _speaking ? voiceAmplitude : 0;
+        _mouthAmp += (tgt - _mouthAmp) * Math.min(1, dt / (tgt > _mouthAmp ? 0.045 : 0.13));
+        if (_t - _visemeAt > 0.09) {
+            var v = _viseme;
+            if (_viseme === 2) { if (_mouthAmp < 0.34) v = (_mouthAmp < 0.09 ? 0 : 1); }
+            else if (_viseme === 1) { if (_mouthAmp > 0.48) v = 2; else if (_mouthAmp < 0.08) v = 0; }
+            else { if (_mouthAmp > 0.45) v = 2; else if (_mouthAmp > 0.13) v = 1; }
+            if (v !== _viseme) { _viseme = v; _visemeAt = _t; }
+        }
+
         // respiración (12-16/min; más rápida alterada) + sway postural + lean
         _breathPhase += dt * (sleeping ? 0.18 : (0.22 + arousal * 0.28)) * Math.PI * 2;
         _swayPhase += dt * 0.35;
         var breath = Math.sin(_breathPhase);
         var sway = Math.sin(_swayPhase) * (sleeping ? 0.15 : 0.8) + Math.sin(_swayPhase * 2.7) * 0.25;
         var nod = dancing ? Math.sin(_t * 3.6) * 1.0 : 0;                     // asiente con la música
-        var speakBob = _speaking ? voiceAmplitude * 1.2 : 0;
+        var speakBob = _speaking ? _mouthAmp * 1.2 : 0;
         body.scale = 1 + breath * 0.004;
         body.rotation = sway + _lean * 3.5 + nod * 0.6;
         body.y = -Math.abs(nod) * 1.5 - speakBob;
@@ -271,7 +285,7 @@ Item {
         var dub = Math.exp(-Math.pow((_heartPhase - 0.24) * 16, 2)) * 0.6;
         var beat = (lub + dub) * (0.22 + arousal * 0.25);
         var baseGlow = sleeping ? 0.22 : (0.45 + pleasure * 0.18 + (dancing ? 0.12 * Math.sin(_t * 3.6) : 0));
-        glowImg.opacity = Math.min(1, baseGlow + beat + _glitch * 0.4 + (_speaking ? voiceAmplitude * 0.15 : 0));
+        glowImg.opacity = Math.min(1, baseGlow + beat + _glitch * 0.4 + _mouthAmp * 0.15);
     }
 
     // ---- susto -> glitch total + TELETRANSPORTE (la huida cyberpunk) ----

@@ -49,7 +49,9 @@ VARIANTS = {
     "eyes_right":  ("eyes",  "eyes looking far to her left side, iris turned sideways"),
     "mouth_open":  ("mouth", "mouth slightly open, speaking mid-word, teeth slightly visible"),
     "mouth_wide":  ("mouth", "mouth open wide, speaking emphatically"),
-    "smile":       ("mouth", "warm delighted smile, joyful"),
+    # sonrisa CERRADA: la de dientes daba miedo (feedback del usuario) — sutil tipo Mona Lisa
+    "smile":       ("mouth", "soft gentle closed-mouth smile, lips together, warm subtle smile, "
+                             "kind relaxed expression, no teeth"),
 }
 
 
@@ -90,25 +92,30 @@ def gen_base():
         print(f"✓ nyx_c{i}.png (seed {seed})")
 
 
-def gen_variants(base_name: str):
+def gen_variants(base_name: str, only: str = "", seeds=(7,)):
+    """Genera variantes; `only` filtra por nombre (p.ej. 'smile') y `seeds` da candidatas."""
     import torch
     from PIL import Image, ImageDraw, ImageFilter
     from diffusers import StableDiffusionXLInpaintPipeline
     base = Image.open(WORK / base_name).convert("RGB")
     pipe = _pipe(StableDiffusionXLInpaintPipeline)
     for name, (box_id, prompt) in VARIANTS.items():
+        if only and name != only:
+            continue
         x, y, w, h = BOXES[box_id]
         mask = Image.new("L", base.size, 0)
         d = ImageDraw.Draw(mask)
         d.ellipse([x, y, x + w, y + h], fill=255)
         mask = mask.filter(ImageFilter.GaussianBlur(8))
-        g = torch.Generator("cuda").manual_seed(7)
-        img = pipe(prompt=f"raw photo, {prompt}, hyperrealistic, sharp focus",
-                   negative_prompt=NEG, image=base, mask_image=mask,
-                   width=W, height=H, strength=0.92,
-                   num_inference_steps=30, guidance_scale=5.5, generator=g).images[0]
-        img.save(WORK / f"nyx_{name}.png")
-        print(f"✓ nyx_{name}.png")
+        for seed in seeds:
+            g = torch.Generator("cuda").manual_seed(seed)
+            img = pipe(prompt=f"raw photo, {prompt}, hyperrealistic, sharp focus",
+                       negative_prompt=NEG, image=base, mask_image=mask,
+                       width=W, height=H, strength=0.92,
+                       num_inference_steps=30, guidance_scale=5.5, generator=g).images[0]
+            suffix = f"_s{seed}" if len(seeds) > 1 else ""
+            img.save(WORK / f"nyx_{name}{suffix}.png")
+            print(f"✓ nyx_{name}{suffix}.png")
 
 
 def cut(base_name: str):
@@ -204,6 +211,8 @@ if __name__ == "__main__":
     if cmd == "base":
         gen_base()
     elif cmd == "variants":
-        gen_variants(sys.argv[2])
+        only = sys.argv[3] if len(sys.argv) > 3 else ""
+        seeds = tuple(int(s) for s in sys.argv[4].split(",")) if len(sys.argv) > 4 else (7,)
+        gen_variants(sys.argv[2], only, seeds)
     elif cmd == "cut":
         cut(sys.argv[2])
