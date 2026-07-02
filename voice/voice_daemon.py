@@ -169,7 +169,11 @@ class VoiceDaemon:
         self._reap_rec()
         emit(event="amplitude", value=0.0)
         if self._pipeline_active.is_set():
-            return   # ya hay un pipeline en curso; descarta este audio (evita solapamiento)
+            # ya hay un pipeline en curso; descarta este audio (evita solapamiento) — pero
+            # AVISA: antes se tiraba en silencio y el QML quedaba en "listening" sin feedback.
+            emit(event="error", msg="aún estaba respondiendo; repite eso en un momento")
+            emit(event="state", value="idle")
+            return
         audio = bytes(self.rec_buf)
         threading.Thread(target=self._pipeline, args=(audio,), daemon=True).start()
 
@@ -253,18 +257,21 @@ class VoiceDaemon:
                       amplitude_cb=lambda v: emit(event="amplitude", value=round(v, 3)),
                       stop_flag=lambda: self.stop_speaking)
 
-        for chunk in self._llm_stream(user_text):
-            if self.stop_speaking:
-                break
-            for sent in splitter.feed(chunk):
-                reply.append(sent)
-                say(sent)
-        if not self.stop_speaking:
-            for sent in splitter.flush():
-                reply.append(sent)
-                say(sent)
-
-        self.speaking = False
+        try:
+            for chunk in self._llm_stream(user_text):
+                if self.stop_speaking:
+                    break
+                for sent in splitter.feed(chunk):
+                    reply.append(sent)
+                    say(sent)
+            if not self.stop_speaking:
+                for sent in splitter.flush():
+                    reply.append(sent)
+                    say(sent)
+        finally:
+            # tts.speak puede lanzar (p.ej. voz Piper inexistente); sin esto `speaking`
+            # quedaba True para siempre y cada PTT posterior mandaba un barge-in espurio.
+            self.speaking = False
         reply_text = " ".join(reply)
         # Guarda el turno en la memoria (limitada a ~6 turnos para acotar el contexto).
         self.history.append({"role": "user", "content": self._last_user})
@@ -319,7 +326,10 @@ class VoiceDaemon:
         if self.cfg.get("persona"):
             msgs.append({"role": "system", "content": self.cfg["persona"]})
         msgs.extend(self.history)   # turnos anteriores -> continuidad
-        msgs.append({"role": "user", "content": user_text + " /no_think"})
+        # OJO: NO añadir "/no_think" al mensaje (es de SmolLM3, no de Qwen3): con Qwen3 entra
+        # como texto plano al prompt y con provider cloud le llega tal cual a Claude. El thinking
+        # se suprime con chat_template_kwargs.enable_thinking=false (abajo).
+        msgs.append({"role": "user", "content": user_text})
         body = json.dumps({
             "model": self.cfg["model"], "messages": msgs, "stream": True,
             "chat_template_kwargs": {"enable_thinking": False},

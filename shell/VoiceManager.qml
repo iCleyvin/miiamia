@@ -60,6 +60,15 @@ Scope {
         command: ["python3", "-u", Quickshell.shellDir + "/../voice/voice_daemon.py"]
         running: true
         stdinEnabled: true   // OBLIGATORIO para poder write() al daemon
+        // Si el daemon muere, resetear el estado (si no, la pet queda con el anillo de "escuchando"
+        // congelado y AutoVision vetada) y relanzarlo con backoff.
+        onExited: {
+            vm.daemonReady = false;
+            vm.voiceState = "idle";
+            vm.amplitude = 0;
+            console.error("miiamia[voice]: el daemon de voz murió; reintento en 3s");
+            respawn.restart();
+        }
         stdout: SplitParser {
             onRead: function (line) {
                 var ev;
@@ -75,6 +84,12 @@ Scope {
                 else if (ev.event === "error") console.error("miiamia[voice]:", ev.msg);
             }
         }
+    }
+
+    Timer {
+        id: respawn
+        interval: 3000
+        onTriggered: if (!daemon.running) daemon.running = true
     }
 
     onAiUrlChanged: if (daemonReady) _sendConfig()

@@ -35,7 +35,16 @@ Scope {
     property bool _busy: false
     property bool _first: true
     property string _lastRemark: ""
+    property var _xhr: null
     readonly property string _eyePath: Quickshell.env("HOME") + "/.cache/miiamia/eyes/auto.png"
+
+    // Watchdog: si el request se cuelga, _busy quedaba en true para siempre y la vista automática
+    // moría en silencio hasta reiniciar. Abortar dispara DONE -> _busy=false y a la próxima.
+    Timer {
+        id: stallWatch
+        interval: 90000
+        onTriggered: if (av._xhr) { console.warn("miiamia[autovision]: request atascado, abortando"); av._xhr.abort(); }
+    }
 
     readonly property bool _canGlance:
         enabled && providerHasVision && backendReady && !_busy
@@ -56,11 +65,12 @@ Scope {
         if (enabled && providerHasVision && !backendReady) av.needsWarmup();   // calienta para la próxima
         if (!_canGlance) return;
         av._busy = true;
-        var mon = monitorName !== "" ? ("-o " + monitorName + " ") : "";
-        // captura el monitor activo y la reduce a 1280px de ancho (menos tokens/latencia de visión)
+        var mon = monitorName !== "" ? ("-o '" + monitorName + "' ") : "";
+        // captura el monitor activo y la reduce a 1280px de ancho (menos tokens/latencia de visión);
+        // sin ImageMagick 7 (`magick`) manda la captura completa en vez de fallar siempre
         grim.command = ["bash", "-lc",
             "mkdir -p ~/.cache/miiamia/eyes && grim " + mon + "-t png '" + _eyePath + "'"
-            + " && magick '" + _eyePath + "' -resize '1280x>' '" + _eyePath + "'"];
+            + " && { command -v magick >/dev/null && magick '" + _eyePath + "' -resize '1280x>' '" + _eyePath + "' || true; }"];
         grim.running = true;
     }
 
@@ -89,11 +99,14 @@ Scope {
         apiMsgs.push({ "role": "user", "content": content });
 
         var xhr = new XMLHttpRequest();
+        av._xhr = xhr;
+        stallWatch.restart();
         xhr.open("POST", aiUrl + "/v1/chat/completions");
         xhr.setRequestHeader("Content-Type", "application/json");
         var raw = "";
         var processed = 0;
         xhr.onreadystatechange = function () {
+            stallWatch.restart();
             if (xhr.readyState >= XMLHttpRequest.LOADING) {
                 var parts = xhr.responseText.split("\n");
                 var upTo = (xhr.readyState === XMLHttpRequest.DONE) ? parts.length : parts.length - 1;
@@ -111,6 +124,8 @@ Scope {
                 }
             }
             if (xhr.readyState === XMLHttpRequest.DONE) {
+                stallWatch.stop();
+                av._xhr = null;
                 av._busy = false;
                 var txt = av._clean(raw);
                 if (txt.length > 1 && txt.toLowerCase().indexOf("[silencio]") < 0) {

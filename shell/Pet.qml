@@ -17,6 +17,12 @@ PanelWindow {
 
     required property var petData       // manifest del personaje (kira.json parseado)
     required property url characterDir  // file:// del directorio del personaje
+    // Un typo en manifest.backend cae en silencio al SpriteBackend (fallback); avisar en el log.
+    onPetDataChanged: {
+        var b = petData ? petData.backend : undefined;
+        if (b !== undefined && ["sprite", "rig", "dragonRig", "dragonRigV2", "dragonRigV3", "model3d", "live2d"].indexOf(b) < 0)
+            console.warn("miiamia[pet]: backend desconocido '" + b + "' en el manifest; uso sprite");
+    }
     property string contextState: "idle" // estado calculado por ContextEngine (M2)
     property bool talking: false          // true mientras el chat streamea la respuesta (M3)
     property string voiceState: "idle"    // idle | listening | thinking | speaking (M4)
@@ -26,6 +32,17 @@ PanelWindow {
     signal petClicked()                   // click izquierdo -> abre/cierra el chat
     signal voicePttStart()                // click DERECHO mantenido -> hablarle (push-to-talk)
     signal voicePttStop()
+    signal petApproached()                // el cursor se acerca a la pet 3D -> saludo (voz + globo)
+    property bool cursorNear: false       // el cursor esta cerca de la pet (para reaccion 3D)
+    property real cursorProximity: 0.0     // 0..1: cercania continua del cursor para atencion/gestos 3D
+    property string model3dIdleMode: ""    // "", "phone", "sit": pequenas rutinas autonomas
+    readonly property string model3dLifeMode:
+        state === "music" ? "dance"
+        : (state === "browsing" || state === "typing") ? "phone"
+        : (state === "watching" || state === "sleeping") ? "sit"
+        : model3dIdleMode
+    property bool _greetReady: true       // cooldown del saludo hablado
+    Timer { id: greetCooldown; interval: 45000; onTriggered: root._greetReady = true }
 
     // Comentario espontáneo (vista automática): texto que aparece en un globo sobre la pet y se va solo.
     property string bubbleText: ""
@@ -111,10 +128,18 @@ PanelWindow {
         readonly property bool isRig: root.petData.backend === "rig"
         readonly property bool isDragonRig: root.petData.backend === "dragonRig"
         readonly property bool isDragonRigV2: root.petData.backend === "dragonRigV2"
+        readonly property bool isDragonRigV3: root.petData.backend === "dragonRigV3"
+        readonly property bool isModel3d: root.petData.backend === "model3d"
+        readonly property var _m3d: root.petData.model3d !== undefined ? root.petData.model3d : null
         readonly property real _scaleEff: root.scaleOverride > 0 ? root.scaleOverride
                : (root.petData.scale !== undefined ? root.petData.scale : 2.0)
-        width: root.isLive2d ? (root.live2dConf && root.live2dConf.w ? root.live2dConf.w : 360) : 128 * _scaleEff
-        height: root.isLive2d ? (root.live2dConf && root.live2dConf.h ? root.live2dConf.h : 500) : 128 * _scaleEff
+        // model3d (waifu 3D): rect alto tipo persona (w/h del manifest, escalado por _scaleEff sobre base 2.0)
+        width: root.isLive2d ? (root.live2dConf && root.live2dConf.w ? root.live2dConf.w : 360)
+               : avatar.isModel3d ? ((avatar._m3d && avatar._m3d.w ? avatar._m3d.w : 380) * (_scaleEff / 2.0))
+               : 128 * _scaleEff
+        height: root.isLive2d ? (root.live2dConf && root.live2dConf.h ? root.live2dConf.h : 500)
+               : avatar.isModel3d ? ((avatar._m3d && avatar._m3d.h ? avatar._m3d.h : 560) * (_scaleEff / 2.0))
+               : 128 * _scaleEff
 
         // Posicion inicial: abajo-derecha, sobre el "suelo" de la pantalla.
         x: root.width - width - 48
@@ -134,52 +159,102 @@ PanelWindow {
             Behavior on yScale { NumberAnimation { duration: 160; easing.type: Easing.OutBack } }
         }
 
-        // Render: rig por huesos (Live2D ligero) o sprite, según el manifest.
-        SpriteBackend {
+        // Render: UN solo backend vivo a la vez (Loader). Antes se instanciaban los 6 backends
+        // siempre y se ocultaban con visible:false — el 3D cargaba su VRM completo aunque la skin
+        // activa fuera un sprite, y al cambiar de skin el backend viejo podía quedar corriendo con
+        // estado obsoleto (bug "mancha"). El Loader garantiza instancia FRESCA del backend correcto
+        // en cada cambio de skin y cero coste de los demás.
+        Loader {
+            id: backendLoader
             anchors.fill: parent
-            visible: !avatar.isRig && !avatar.isDragonRig && !avatar.isDragonRigV2 && !root.isLive2d
-            characterDir: root.characterDir
-            animations: root.petData.animations !== undefined ? root.petData.animations : ({})
-            currentState: root.state
-            scale: avatar._scaleEff
-            blinkSource: root.petData.blink !== undefined ? root.characterDir + root.petData.blink : ""
-            talking: root.talking || root.voiceState === "speaking"
-            voiceAmplitude: root.voiceAmplitude
+            sourceComponent: root.isLive2d ? null
+                : avatar.isModel3d ? model3dComp
+                : avatar.isDragonRigV3 ? dragonRigV3Comp
+                : avatar.isDragonRigV2 ? dragonRigV2Comp
+                : avatar.isDragonRig ? dragonRigComp
+                : avatar.isRig ? rigComp
+                : spriteComp
         }
-        RigBackend {
-            anchors.fill: parent
-            visible: avatar.isRig && !root.isLive2d
-            characterDir: root.characterDir
-            rig: avatar.isRig && root.petData.rig !== undefined ? root.petData.rig : null
-            scale: avatar._scaleEff
-            currentState: root.state
-            talking: root.talking || root.voiceState === "speaking"
-            headYaw: root.headYaw
-            headPitch: root.headPitch
+        Component {
+            id: spriteComp
+            SpriteBackend {
+                characterDir: root.characterDir
+                animations: root.petData.animations !== undefined ? root.petData.animations : ({})
+                currentState: root.state
+                scale: avatar._scaleEff
+                blinkSource: root.petData.blink !== undefined ? root.characterDir + root.petData.blink : ""
+                talking: root.talking || root.voiceState === "speaking"
+                voiceAmplitude: root.voiceAmplitude
+            }
         }
-        DragonRigBackend {
-            anchors.fill: parent
-            visible: avatar.isDragonRig && !root.isLive2d
-            characterDir: root.characterDir
-            rig: avatar.isDragonRig && root.petData.rig !== undefined ? root.petData.rig : null
-            scale: avatar._scaleEff
-            currentState: root.state
-            talking: root.talking || root.voiceState === "speaking"
-            voiceAmplitude: root.voiceAmplitude
-            headYaw: root.headYaw
-            headPitch: root.headPitch
+        Component {
+            id: rigComp
+            RigBackend {
+                characterDir: root.characterDir
+                rig: avatar.isRig && root.petData.rig !== undefined ? root.petData.rig : null
+                scale: avatar._scaleEff
+                currentState: root.state
+                talking: root.talking || root.voiceState === "speaking"
+                headYaw: root.headYaw
+                headPitch: root.headPitch
+            }
         }
-        DragonRigV2Backend {
-            anchors.fill: parent
-            visible: avatar.isDragonRigV2 && !root.isLive2d
-            characterDir: root.characterDir
-            rig: avatar.isDragonRigV2 && root.petData.rig !== undefined ? root.petData.rig : null
-            scale: avatar._scaleEff
-            currentState: root.state
-            talking: root.talking || root.voiceState === "speaking"
-            voiceAmplitude: root.voiceAmplitude
-            headYaw: root.headYaw
-            headPitch: root.headPitch
+        Component {
+            id: dragonRigComp
+            DragonRigBackend {
+                characterDir: root.characterDir
+                rig: avatar.isDragonRig && root.petData.rig !== undefined ? root.petData.rig : null
+                scale: avatar._scaleEff
+                currentState: root.state
+                talking: root.talking || root.voiceState === "speaking"
+                voiceAmplitude: root.voiceAmplitude
+                headYaw: root.headYaw
+                headPitch: root.headPitch
+            }
+        }
+        Component {
+            id: dragonRigV2Comp
+            DragonRigV2Backend {
+                characterDir: root.characterDir
+                rig: avatar.isDragonRigV2 && root.petData.rig !== undefined ? root.petData.rig : null
+                scale: avatar._scaleEff
+                currentState: root.state
+                talking: root.talking || root.voiceState === "speaking"
+                voiceAmplitude: root.voiceAmplitude
+                headYaw: root.headYaw
+                headPitch: root.headPitch
+            }
+        }
+        Component {
+            id: dragonRigV3Comp
+            DragonRigV3Backend {
+                characterDir: root.characterDir
+                rig: avatar.isDragonRigV3 && root.petData.rig !== undefined ? root.petData.rig : null
+                scale: avatar._scaleEff
+                currentState: root.state
+                talking: root.talking || root.voiceState === "speaking"
+                voiceAmplitude: root.voiceAmplitude
+                headYaw: root.headYaw
+                headPitch: root.headPitch
+            }
+        }
+        // Waifu ANIME 3D (VRM/glTF via Qt Quick 3D). Config en manifest.model3d (índices por modelo).
+        Component {
+            id: model3dComp
+            Model3DBackend {
+                characterDir: root.characterDir
+                scale: avatar._scaleEff
+                currentState: root.state
+                talking: root.talking || root.voiceState === "speaking"
+                voiceAmplitude: root.voiceAmplitude
+                voiceState: root.voiceState
+                headYaw: root.headYaw
+                headPitch: root.headPitch
+                cursorNear: root.cursorNear    // reacciona (saluda/despierta) cuando el cursor se acerca
+                cursorProximity: root.cursorProximity
+                lifeMode: root.model3dLifeMode
+                config: avatar._m3d            // objeto model3d completo del manifest (indices, cam, armPose...)
+            }
         }
 
         MouseArea {
@@ -261,7 +336,7 @@ PanelWindow {
             // poses propias por estado). Se desactivan en los backends de dragón; se mantienen en las
             // skins sprite/kawaii, para las que fueron diseñados.
             property bool shown: cfg !== null && root.voiceState === "idle" && !root.talking && !root.isLive2d
-                                 && !avatar.isDragonRig && !avatar.isDragonRigV2
+                                 && !avatar.isDragonRig && !avatar.isDragonRigV2 && !avatar.isDragonRigV3 && !avatar.isModel3d
             visible: shown
             source: cfg ? root.propsDir + cfg.p + ".png" : ""
             width: cfg ? parent.width * cfg.s : 0
@@ -390,15 +465,55 @@ PanelWindow {
                 var ry = parseInt(mm[2]) - root.monOffY;
                 var pcx = avatar.x + avatar.width / 2;
                 var pcy = avatar.y + avatar.height / 2;
-                root.headYaw = Math.max(-1, Math.min(1, (rx - pcx) / 520));
-                root.headPitch = Math.max(-1, Math.min(1, (ry - pcy) / 520));
+                var dx = rx - pcx;
+                var dy = ry - pcy;
+                root.headYaw = Math.max(-1, Math.min(1, dx / 520));
+                root.headPitch = Math.max(-1, Math.min(1, dy / 520));
+                var nx = dx / Math.max(1, avatar.width * 1.15);
+                var ny = dy / Math.max(1, avatar.height * 0.95);
+                root.cursorProximity = avatar.isModel3d ? Math.max(0, Math.min(1, 1 - Math.sqrt(nx*nx + ny*ny))) : 0;
+                // proximidad: el cursor esta "cerca" si cae sobre/junto al cuerpo de la pet
+                var near = (Math.abs(dx) < avatar.width * 0.9)
+                        && (dy > -avatar.height * 0.62) && (dy < avatar.height * 0.55);
+                if (near && !root.cursorNear && avatar.isModel3d && root._greetReady) {
+                    root._greetReady = false; greetCooldown.restart();
+                    root.petApproached();          // -> saludo por voz + globo (shell.qml)
+                }
+                root.cursorNear = near;
             }
         }
     }
     Timer {
         interval: 110
-        running: (avatar.isRig || avatar.isDragonRig || avatar.isDragonRigV2) && root.state !== "gaming" && root.state !== "sleeping"
+        // model3d tambien sigue el cursor (mirada) y ademas cuando esta "sleeping" (para despertar al acercarse)
+        running: ((avatar.isRig || avatar.isDragonRig || avatar.isDragonRigV2 || avatar.isDragonRigV3) && root.state !== "gaming" && root.state !== "sleeping")
+                 || (avatar.isModel3d && root.state !== "gaming")
         repeat: true
         onTriggered: if (!cursorProc.running) cursorProc.running = true
+        // Al parar el polling (p.ej. entra un juego), resetear: si no, la pet 3D se queda con la
+        // pose de "atencion al cursor" congelada durante toda la partida.
+        onRunningChanged: if (!running) {
+            root.cursorNear = false;
+            root.cursorProximity = 0;
+            root.headYaw = 0;
+            root.headPitch = 0;
+        }
+    }
+    Timer {
+        id: model3dIdleLife
+        interval: 10000
+        repeat: true
+        running: avatar.isModel3d && root.state === "idle" && root.voiceState === "idle" && !root.talking
+        onTriggered: {
+            interval = 16000 + Math.round(Math.random() * 16000);
+            var r = Math.random();
+            root.model3dIdleMode = r < 0.34 ? "phone" : (r < 0.58 ? "sit" : "");
+            if (root.model3dIdleMode !== "") idleLifeClear.restart();
+        }
+    }
+    Timer {
+        id: idleLifeClear
+        interval: 8500
+        onTriggered: root.model3dIdleMode = ""
     }
 }

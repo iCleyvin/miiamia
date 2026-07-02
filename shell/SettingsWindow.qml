@@ -21,7 +21,8 @@ PanelWindow {
     property string stt: "ggml-base"
     property string language: "es"
     property string monitor: ""
-    property string persona: ""
+    property string persona: ""       // override GLOBAL del usuario (settings.persona); vacío = cada skin usa la suya
+    property string personaHint: ""   // personalidad propia del personaje activo (solo informativa)
     property string customModel: ""
     property string agentProvider: "local"
     property bool agentHasKey: false      // si ya hay key guardada (NO se carga la key real en el cliente)
@@ -121,19 +122,25 @@ PanelWindow {
             if (win._pendVoice) {
                 win.status = code === 0 ? "Voz lista ✓" : "Error al descargar la voz";
                 if (code === 0) win.setVoice(win._pendVoice);
+                else voiceCombo.currentIndex = win._idx(win.voices, win.voice);   // revertir la UI
                 win._pendVoice = "";
             } else if (win._pendStt) {
                 win.status = code === 0 ? "Modelo de escucha listo ✓" : "Error al descargar el modelo";
                 if (code === 0) win.setStt(win._pendStt);
+                else sttCombo.currentIndex = win._idx(win.stts, win.stt);         // revertir la UI
                 win._pendStt = "";
             }
         }
     }
+    // Los combos se deshabilitan mientras dl corre (ver abajo): dos descargas a la vez se pisaban
+    // (running=true sobre un Process activo es no-op y la segunda jamás se ejecutaba).
     function chooseVoice(id) {
+        if (dl.running) return;
         win._pendVoice = id; win.status = "Descargando voz…";
         dl.command = ["bash", win._tools + "/get_voice.sh", id]; dl.running = true;
     }
     function chooseStt(id) {
+        if (dl.running) return;
         win._pendStt = id; win.status = "Descargando modelo de escucha…";
         dl.command = ["bash", win._tools + "/get_stt.sh", id]; dl.running = true;
     }
@@ -204,14 +211,18 @@ PanelWindow {
                     width: parent.width; spacing: 8
                     Text { text: "Voz de Kira (cómo habla)"; color: "#cfc7e8"; font.pixelSize: 13 }
                     ComboBox {
+                        id: voiceCombo
                         width: parent.width
+                        enabled: !dl.running
                         model: win.voices; textRole: "label"
                         currentIndex: win._idx(win.voices, win.voice)
                         onActivated: win.chooseVoice(win.voices[currentIndex].id)
                     }
                     Text { text: "Modelo de escucha (cómo te entiende)"; color: "#cfc7e8"; font.pixelSize: 13 }
                     ComboBox {
+                        id: sttCombo
                         width: parent.width
+                        enabled: !dl.running
                         model: win.stts; textRole: "label"
                         currentIndex: win._idx(win.stts, win.stt)
                         onActivated: win.chooseStt(win.stts[currentIndex].id)
@@ -226,11 +237,14 @@ PanelWindow {
                 }
 
                 // ---- Personalidad ----
+                // OJO: este campo es el override GLOBAL (settings.persona). Antes se precargaba con
+                // la persona del personaje activo, y "Aplicar" sin editar la congelaba para TODOS
+                // los skins (Vivi hablaba como Kira). Vacío = cada personaje usa la suya.
                 Text { text: "PERSONALIDAD"; color: "#a78cff"; font.pixelSize: 12; font.bold: true }
                 Column {
                     width: parent.width; spacing: 8
                     Text {
-                        text: "Elige un estilo o escribe el tuyo. El texto manda y es libre — tú decides cómo habla."
+                        text: "Elige un estilo o escribe el tuyo. Déjalo vacío para que cada personaje use su propia personalidad."
                         color: "#cfc7e8"; font.pixelSize: 13; wrapMode: Text.Wrap; width: parent.width
                     }
                     Flow {
@@ -252,14 +266,24 @@ PanelWindow {
                                 text: win.persona
                                 color: "#f2eeff"; font.pixelSize: 13
                                 wrapMode: TextArea.Wrap
-                                placeholderText: "Describe cómo quieres que sea y hable Kira… (sin filtros)"
+                                placeholderText: win.personaHint !== ""
+                                    ? "(vacío = la del personaje)\n" + win.personaHint
+                                    : "Describe cómo quieres que sea y hable tu pet… (sin filtros)"
                                 background: Item {}
                             }
                         }
                     }
-                    Button {
-                        text: "Aplicar personalidad"
-                        onClicked: { win.setPersona(personaArea.text); win.status = "Personalidad aplicada ✓"; }
+                    Row {
+                        spacing: 8
+                        Button {
+                            text: "Aplicar personalidad"
+                            onClicked: { win.setPersona(personaArea.text); win.status = "Personalidad aplicada ✓"; }
+                        }
+                        Button {
+                            text: "↩ La del personaje"
+                            visible: win.persona !== "" || personaArea.text !== ""
+                            onClicked: { personaArea.text = ""; win.setPersona(""); win.status = "Cada personaje usa su personalidad ✓"; }
+                        }
                     }
                 }
 

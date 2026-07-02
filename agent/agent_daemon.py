@@ -487,6 +487,18 @@ class Handler(BaseHTTPRequestHandler):
                                     stderr=subprocess.PIPE, text=True, cwd=workdir)
         except Exception as e:
             self._sse_text(f"(no pude lanzar Claude Code: {e})"); self._sse_done(); return
+        # Drenar stderr en un hilo: sin lector, si el CLI escribe >64KB de warnings/logs se
+        # bloquea escribiendo, stdout se congela y cada request muere a los 150s del watchdog.
+        err_tail: list = []
+        def _drain_stderr():
+            try:
+                for eline in proc.stderr:
+                    err_tail.append(eline)
+                    if len(err_tail) > 20:
+                        err_tail.pop(0)
+            except Exception:
+                pass
+        threading.Thread(target=_drain_stderr, daemon=True).start()
         killer = threading.Timer(150, lambda: proc.kill())   # watchdog anti-cuelgue
         killer.start()
         got = False
@@ -521,9 +533,7 @@ class Handler(BaseHTTPRequestHandler):
                 try: proc.kill()
                 except Exception: pass
         if not got:
-            err = ""
-            try: err = (proc.stderr.read() or "")[:200]
-            except Exception: pass
+            err = "".join(err_tail)[-200:]
             sys.stderr.write(f"[claude-cli] sin salida. stderr: {err}\n")
             self._sse_text("(no pude usar Claude Code; verifica que `claude` esté logueado en tu terminal)")
         self._sse_done()

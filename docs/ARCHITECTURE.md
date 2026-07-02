@@ -13,7 +13,8 @@ verificadas adversarialmente, el roadmap y el presupuesto de VRAM. Entorno objet
 Un overlay 100% nativo en Quickshell/QML con avatar por **sprite sheets** (`AnimatedSprite`).
 Dos daemons Python independientes (contexto y IA/voz) se comunican con el overlay por **D-Bus**.
 El renderer web para Live2D/VRM se diseñó pero está **bloqueado** por falta de soporte estable
-(ver §6), así que NO es parte del MVP.
+(ver §6), así que NO es parte del MVP. Para criaturas hiperrealistas, el camino actual es un rig
+2D por partes documentado en [`docs/DRAGON_RIGS.md`](DRAGON_RIGS.md).
 
 ### Por qué (resumen de la investigación)
 - **Overlay:** el protocolo `wlr-layer-shell` es la única vía correcta en Hyprland. La capa
@@ -36,6 +37,7 @@ El renderer web para Live2D/VRM se diseñó pero está **bloqueado** por falta d
 | `shell/shell.qml` | Entry: lee personaje activo, carga manifest, monta la mascota | Quickshell/QML |
 | `shell/Pet.qml` | Ventana layer-shell overlay; click-through; posición/drag; recibe el estado | QML `PanelWindow` + `WlrLayershell` + `Region` |
 | `shell/backends/SpriteBackend.qml` | Render de la animación según el estado actual | Qt Quick `AnimatedSprite` |
+| `shell/backends/DragonRigV3Backend.qml` | Rig hiperreal por partes para Averno v3 | Qt Quick `Image` + pivotes declarados |
 | `shell/ChatBubble.qml` *(M3)* | Ventana de chat **separada** (foco de teclado), abre con `SUPER+M` | QML `PanelWindow` `keyboardFocus=OnDemand` |
 | `shell/ContextEngine.qml` ✅ | Detecta la ventana activa y calcula el estado | **QML nativo**: `Quickshell.Hyprland` `rawEvent` (socket2) + idle timer |
 | `context/` *(M4+, opcional)* | Solo lo que QML no ve: GameMode D-Bus, tecleo real (evdev), idle real (ext-idle-notify) | Python asyncio |

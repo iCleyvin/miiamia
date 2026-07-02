@@ -66,11 +66,13 @@ class WhisperServer:
         b += ("--%s--\r\n" % boundary).encode()
 
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
-        conn.request("POST", "/inference", bytes(b),
-                     {"Content-Type": "multipart/form-data; boundary=%s" % boundary})
-        resp = conn.getresponse()
-        data = resp.read().decode("utf-8", "replace")
-        conn.close()
+        try:
+            conn.request("POST", "/inference", bytes(b),
+                         {"Content-Type": "multipart/form-data; boundary=%s" % boundary})
+            resp = conn.getresponse()
+            data = resp.read().decode("utf-8", "replace")
+        finally:
+            conn.close()   # sin fuga de socket si la request lanza (timeout, reset...)
         try:
             return (json.loads(data).get("text") or "").strip()
         except Exception:

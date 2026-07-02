@@ -1,8 +1,7 @@
 // shell.qml — punto de entrada de miiamia (se ejecuta con `quickshell -p ~/miiamia/shell`).
 //
-// Carga el personaje activo y monta su ventana overlay (Pet.qml).
-// M1: el personaje activo esta fijo en "kira". En M2 se leera de config/miiamia.toml
-// (lo expone el daemon Python de contexto, que tambien empuja el estado por D-Bus).
+// Carga el personaje activo (settings.json) y monta su ventana overlay (Pet.qml) junto con
+// el chat, los ajustes, el cerebro (AIBackend), la voz (VoiceManager) y la vista automática.
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -19,22 +18,34 @@ ShellRoot {
     readonly property string charDirPath: projectRoot + "/characters/" + activeCharacter
 
     // URL (file://) del directorio del personaje — para que AnimatedSprite resuelva imagenes.
-    readonly property url characterDir: "file://" + charDirPath + "/"
-    // Ruta de filesystem del manifest — FileView usa path, no url.
-    readonly property string manifestPath: charDirPath + "/" + activeCharacter + ".json"
+    // NO reactiva sobre activeCharacter: la fija loadCharacter() JUNTO al manifest, para que el
+    // directorio y el manifest cambien de forma atómica (si no, characterDir cambia antes que el
+    // manifest y el backend viejo intenta cargar rutas inexistentes -> "mancha").
+    property url characterDir: "file://" + charDirPath + "/"
 
     // IO nativo de Quickshell (XMLHttpRequest sobre archivos locales esta deshabilitado).
     FileView {
         id: manifestFile
-        blockLoading: true   // lectura sincrona; la ruta la fija loadCharacter() (cambio de skin en vivo)
+        blockLoading: true   // lectura sincrona de la carga INICIAL
+        // Los cambios de path EN VIVO cargan async con solo blockLoading -> text() devolvía el
+        // manifest VIEJO al cambiar de skin desde el menú (bug "mancha"). blockAllReads bloquea
+        // también las relecturas por cambio de path. Verificado con harness offscreen.
+        blockAllReads: true
     }
 
     // Manifest del personaje activo. Se recarga EN VIVO al cambiar de skin (no es binding).
     property var manifest: ({ animations: {}, scale: 2.0, defaultState: "idle" })
     function loadCharacter() {
-        manifestFile.path = app.manifestPath;   // fuerza la recarga sincrona del skin activo
+        // Derivar las rutas LOCALMENTE de activeCharacter: las properties encadenadas
+        // (charDirPath) pueden leerse STALE dentro del handler de cambio — verificado con
+        // harness: devolvían la ruta del skin ANTERIOR (mitad del bug "mancha").
+        var dir = app.projectRoot + "/characters/" + app.activeCharacter;
+        manifestFile.path = dir + "/" + app.activeCharacter + ".json";
+        manifestFile.reload();                   // FileView NO releé solo al cambiar path en vivo -> forzar
         try { app.manifest = JSON.parse(manifestFile.text()); }
-        catch (e) { console.error("miiamia: manifest inválido", manifestPath, "-", e); }
+        catch (e) { console.error("miiamia: manifest inválido", manifestFile.path, "-", e); return; }
+        app.characterDir = "file://" + dir + "/";   // dir DESPUÉS del manifest (atómico)
+        console.log("miiamia[skin]: char=" + app.activeCharacter + " backend=" + app.manifest.backend + " dir=" + app.characterDir);
     }
     property bool _ready: false
     onActiveCharacterChanged: if (_ready) loadCharacter()   // ignora cambios transitorios de init
@@ -99,7 +110,8 @@ ShellRoot {
     // voice sin fx). Así el dragón suena infernal y lento SOLO para esta pet.
     readonly property var _petVoice:
         (manifest.voice !== undefined && manifest.voice && manifest.voice.fx) ? manifest.voice : null
-    readonly property string effectiveTtsVoice: _petVoice ? _petVoice.voice : settings.voice.tts_voice
+    readonly property string effectiveTtsVoice:
+        (_petVoice && _petVoice.voice) ? _petVoice.voice : settings.voice.tts_voice
     readonly property string effectiveVoiceFx: _petVoice ? _petVoice.fx : ""
     readonly property real effectiveLengthScale:
         (_petVoice && _petVoice.length_scale !== undefined) ? _petVoice.length_scale : 1.0
@@ -113,10 +125,30 @@ ShellRoot {
         }
         o[parts[parts.length - 1]] = value;
         app.settings = s;                                   // reasigna -> re-evalúa bindings en vivo
-        saver.command = ["python3", projectRoot + "/tools/save_settings.py", JSON.stringify(s)];
-        saver.running = true;
+        _saveSettings();
     }
-    Process { id: saver }
+    // Guardado serializado: si el saver sigue corriendo (p.ej. arrastrando el slider de escala),
+    // se marca pendiente y se re-guarda al terminar — antes el último cambio podía perderse.
+    // El JSON va por STDIN (no argv): puede llevar API keys y argv es visible en /proc.
+    property bool _savePending: false
+    function _saveSettings() {
+        if (saver.running) { _savePending = true; return; }
+        saver.running = true;   // onStarted escribe el JSON y cierra stdin
+    }
+    Process {
+        id: saver
+        command: ["python3", projectRoot + "/tools/save_settings.py"]
+        stdinEnabled: true
+        onStarted: {
+            saver.write(JSON.stringify(app.settings) + "\n");
+            saver.stdinEnabled = false;   // cierra stdin -> el script lee EOF y escribe
+        }
+        onExited: function (code) {
+            saver.stdinEnabled = true;
+            if (code !== 0) console.error("miiamia: fallo guardando settings.json (código " + code + ")");
+            if (app._savePending) { app._savePending = false; app._saveSettings(); }
+        }
+    }
     Process {   // re-detecta hardware + descarga el modelo de IA, luego recarga el motor
         id: provisioner
         command: ["bash", projectRoot + "/tools/provision.sh"]
@@ -132,6 +164,7 @@ ShellRoot {
         contextState: context.state
         agentProvider: app.effectiveProvider   // local o cloud; decide si arranca el motor local
         modelOverride: app.settings.custom_model !== undefined ? app.settings.custom_model : ""
+        chatOpen: chatWindow.open              // con el chat visible no se apaga por idle
     }
 
     // Voz (M4): STT (whisper.cpp) + TTS (Piper). Push-to-talk = click derecho sobre la mascota.
@@ -160,6 +193,8 @@ ShellRoot {
         aiUrl: ai.endpoint
         backendReady: ai.ready
         model: "kira"
+        hasVision: app.effectiveProvider !== "local"   // gate del 👁 (el modelo local no ve)
+        monitorName: app.settings.monitor !== undefined ? app.settings.monitor : ""
     }
     Connections {
         target: chatWindow
@@ -178,7 +213,10 @@ ShellRoot {
         stt: app.settings.voice.stt_model
         language: app.settings.voice.language
         monitor: app.settings.monitor !== undefined ? app.settings.monitor : ""
-        persona: app.effectivePersona
+        // persona = override GLOBAL del usuario (no la efectiva: precargar la del skin y "Aplicar"
+        // la congelaba para todos los personajes). personaHint = la propia del skin, informativa.
+        persona: app.settings.persona !== undefined ? app.settings.persona : ""
+        personaHint: app.manifest.persona !== undefined ? app.manifest.persona : ""
         customModel: app.settings.custom_model !== undefined ? app.settings.custom_model : ""
         agentProvider: app.settings.agent.provider
         agentHasKey: (app.settings.agent.api_key || "").length > 0
@@ -241,6 +279,15 @@ ShellRoot {
         onPetClicked: chatWindow.open = !chatWindow.open
         onVoicePttStart: voice.pttStart()
         onVoicePttStop: voice.pttStop()
+        // Saludo espontaneo: cuando acercas el cursor a la pet, saluda (globo + voz dulce).
+        onPetApproached: {
+            var gs = app.manifest.greetings;
+            if (gs && gs.length > 0) {
+                var t = gs[Math.floor(Math.random() * gs.length)];
+                petWindow.bubbleText = t;
+                voice.say(t);
+            }
+        }
     }
 
     // Calienta el cerebro (solo el /health del daemon) un par de segundos tras arrancar — ya con

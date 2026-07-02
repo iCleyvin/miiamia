@@ -73,6 +73,19 @@ Item {
     Component.onCompleted: _syncPoseSource()
     on_PoseSourceKeyChanged: _syncPoseSource()
 
+    // Al cambiar de SKIN en vivo (no solo de estado), el front/back y el crossfade pueden quedar a
+    // medias y mostrarse una "mancha" en vez de la nueva pet (p.ej. al pasar del dragón al ajolote).
+    // Forzamos un reset limpio a la pose correcta una vez que todos los bindings se asentaron.
+    onCharacterDirChanged: Qt.callLater(_resetPoseForSkin)
+    function _resetPoseForSkin() {
+        if (poseCrossfade.running)
+            poseCrossfade.stop();
+        backend._backPoseSource = "";
+        backend._frontPoseSource = backend._poseSourceKey;
+        posePrevious.opacity = 0;
+        poseCurrent.opacity = 1;
+    }
+
     // Ritmo de la vida segun la actividad (reaccion sin cambiar el arte):
     //  musica = rapido y reboton ("bailando"); juego = animado; pelis = tranquilo; dormir = lento.
     readonly property int _bobDur: {
@@ -180,7 +193,7 @@ Item {
             frameCount: backend._anim ? backend._anim.frameCount : 1
             frameWidth: backend._anim ? backend._anim.frameWidth : 128
             frameHeight: backend._anim ? backend._anim.frameHeight : 128
-            frameDuration: backend._anim ? Math.round(1000 / backend._anim.fps) : 125
+            frameDuration: backend._anim ? Math.round(1000 / (backend._anim.fps || 8)) : 125
             loops: AnimatedSprite.Infinite
             interpolate: true
             running: visible

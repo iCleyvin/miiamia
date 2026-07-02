@@ -1,4 +1,4 @@
-# ~/.config/miiamia/ai.toml — config del backend de IA (separada de miiamia.toml).
+# ~/.config/miiamia/ai.toml — config del motor de IA local.
 # Este archivo en el repo es la PLANTILLA por defecto. tools/provision.sh escribe la versión
 # activa en ~/.config/miiamia/ai.toml tras detectar tu hardware y descargar el modelo.
 # AIBackend.qml la lee con FileView. Editable a mano.

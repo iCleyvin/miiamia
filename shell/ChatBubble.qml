@@ -26,6 +26,17 @@ PanelWindow {
     signal openSettings()             // el ⚙ abre el menú de configuración
     property string pendingVisionText: ""
     readonly property string eyePath: Quickshell.env("HOME") + "/.cache/miiamia/eyes/last.png"
+    property bool hasVision: false    // el provider efectivo tiene visión (gate del 👁; Qwen3 local no ve)
+    property string monitorName: ""   // monitor a capturar (el de la pet); "" = todos
+    property var _xhr: null           // request en vuelo (para abortar por atasco o al cerrar)
+
+    // Watchdog anti-atasco: si el servidor acepta la conexión pero deja de mandar datos, el
+    // streaming quedaba en true para siempre (input y ✕ muertos). Abortar dispara DONE -> limpieza.
+    Timer {
+        id: stallWatch
+        interval: 45000
+        onTriggered: if (chat._xhr) { console.warn("miiamia[chat]: stream atascado, abortando"); chat._xhr.abort(); }
+    }
 
     visible: open
     onOpenChanged: if (open) input.forceActiveFocus()
@@ -49,11 +60,16 @@ PanelWindow {
     }
 
     function captureVision(text) {
-        if (chat.streaming || !chat.backendReady) return;
+        if (chat.streaming || !chat.backendReady || !chat.hasVision) return;
         chat.pendingVisionText = text && text.length > 0
             ? text
             : "Mira mi pantalla y dime qué ves. Si hay algo importante, descríbelo y dime qué puedes hacer con eso.";
-        eyeCapture.command = ["bash", "-lc", "mkdir -p ~/.cache/miiamia/eyes && grim -t png ~/.cache/miiamia/eyes/last.png"];
+        // Captura solo el monitor de la pet y reduce a 1280px (menos tokens/latencia); si no hay
+        // ImageMagick 7 (`magick`), manda la captura a resolución completa igual.
+        var mon = chat.monitorName !== "" ? ("-o '" + chat.monitorName + "' ") : "";
+        eyeCapture.command = ["bash", "-lc",
+            "mkdir -p ~/.cache/miiamia/eyes && grim " + mon + "-t png ~/.cache/miiamia/eyes/last.png"
+            + " && { command -v magick >/dev/null && magick ~/.cache/miiamia/eyes/last.png -resize '1280x>' ~/.cache/miiamia/eyes/last.png || true; }"];
         eyeCapture.running = true;
     }
 
@@ -85,12 +101,15 @@ PanelWindow {
         listView.positionViewAtEnd();
 
         var xhr = new XMLHttpRequest();
+        chat._xhr = xhr;
+        stallWatch.restart();
         xhr.open("POST", chat.aiUrl + "/v1/chat/completions");
         xhr.setRequestHeader("Content-Type", "application/json");
         var processed = 0;
         var raw = "";   // texto crudo acumulado; lo mostrado pasa por _stripThink()
 
         xhr.onreadystatechange = function () {
+            stallWatch.restart();   // hay actividad -> el stream no está atascado
             if (xhr.readyState >= XMLHttpRequest.LOADING) {
                 var parts = xhr.responseText.split("\n");
                 var upTo = (xhr.readyState === XMLHttpRequest.DONE) ? parts.length : parts.length - 1;
@@ -112,6 +131,8 @@ PanelWindow {
                 }
             }
             if (xhr.readyState === XMLHttpRequest.DONE) {
+                stallWatch.stop();
+                chat._xhr = null;
                 chat.streaming = false;
                 if (msgs.get(slot).text === "")
                     msgs.setProperty(slot, "text", "…(sin respuesta — ¿está corriendo el motor de IA?)");
@@ -166,6 +187,7 @@ PanelWindow {
                 Item { width: parent.width - 205; height: 1 }
                 Text {
                     text: "👁"; color: "#9a8fc0"; font.pixelSize: 15
+                    visible: chat.hasVision   // sin cerebro con visión el 👁 no aplica (Qwen3 local no ve)
                     MouseArea {
                         anchors.fill: parent
                         enabled: chat.backendReady && !chat.streaming
@@ -181,9 +203,17 @@ PanelWindow {
                     MouseArea { anchors.fill: parent; onClicked: chat.openSettings() }
                 }
                 Text {
-                    text: chat.streaming ? "escribiendo…" : "✕"
+                    text: chat.streaming ? "✕ detener" : "✕"
                     color: "#9a8fc0"; font.pixelSize: 13
-                    MouseArea { anchors.fill: parent; enabled: !chat.streaming; onClicked: chat.open = false }
+                    // Siempre clickeable: si hay stream en curso lo aborta (antes quedabas atrapado
+                    // con el ✕ deshabilitado hasta que el stream terminara... si terminaba).
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            if (chat._xhr) chat._xhr.abort();
+                            else chat.open = false;
+                        }
+                    }
                 }
             }
 

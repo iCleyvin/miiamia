@@ -51,7 +51,7 @@ Control del servicio: `systemctl --user restart|stop miiamia` · logs: `journalc
 | Capa | Tecnología |
 |------|-----------|
 | Overlay | [Quickshell](https://quickshell.org) (Qt6/QML) + `wlr-layer-shell` |
-| Avatar | Qt Quick sprites (cualquier personaje; manifiesto en `characters/`) |
+| Avatar | Qt Quick sprites y rigs por partes (manifiestos en `characters/`) |
 | Contexto | Hyprland IPC (`socket2`) + MPRIS (`playerctl`) |
 | Chat (LLM) | [llama.cpp](https://github.com/ggml-org/llama.cpp) + Qwen3 (Apache-2.0), o cualquier GGUF |
 | Voz | [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (STT) + [Piper](https://github.com/rhasspy/piper) (TTS) |
@@ -69,6 +69,10 @@ Son arte procedural de relleno generado por `tools/make_skins.py` (regenéralas 
 Para crear el tuyo: copia `characters/kira/` a `characters/<tu-personaje>/`, renombra y edita el
 `.json` (animaciones, voz, personalidad), reemplaza los sprites por tu arte (sprite sheet de
 6×128px por estado) y añádelo a `characters/skins.json`. Aparecerá en el selector.
+
+Para mascotas hiperrealistas por partes, usa el formato de Averno v3 (`dragonRigV3`). Esta ruta
+separa cuerpo, cabeza, alas, patas, cola, brillos y fuego con pivotes declarados en el manifest.
+Detalle técnico: [`docs/DRAGON_RIGS.md`](docs/DRAGON_RIGS.md).
 
 ## Licencia
 

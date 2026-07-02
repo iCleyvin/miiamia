@@ -17,24 +17,34 @@ fi
 
 # --- 1. Piper (binario estático, NO del AUR) ---
 if [[ ! -x "$VOICE_DIR/piper/piper" ]]; then
-  say "Descargando Piper (TTS)…"
-  curl -L --fail -o /tmp/miiamia-piper.tgz \
-    https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
-  tar -xzf /tmp/miiamia-piper.tgz -C "$VOICE_DIR"   # crea $VOICE_DIR/piper/
-  rm -f /tmp/miiamia-piper.tgz
-  echo "   ✓ $VOICE_DIR/piper/piper"
+  # Piper publica binarios por arquitectura; antes se bajaba x86_64 incondicional y en
+  # aarch64 (Raspberry/Asahi) daba "Exec format error" al primer TTS.
+  case "$(uname -m)" in
+    x86_64)          PIPER_ARCH="x86_64" ;;
+    aarch64|arm64)   PIPER_ARCH="aarch64" ;;
+    armv7l)          PIPER_ARCH="armv7l" ;;
+    *) printf '\033[1;33m! Arquitectura %s sin binario Piper oficial; la pet no hablará (TTS off).\033[0m\n' "$(uname -m)"; PIPER_ARCH="" ;;
+  esac
+  if [[ -n "$PIPER_ARCH" ]]; then
+    say "Descargando Piper (TTS, $PIPER_ARCH)…"
+    tgz="$(mktemp -t miiamia-piper-XXXXXX.tgz)"
+    curl -L --fail -o "$tgz" \
+      "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_${PIPER_ARCH}.tar.gz"
+    tar -xzf "$tgz" -C "$VOICE_DIR"   # crea $VOICE_DIR/piper/
+    rm -f "$tgz"
+    echo "   ✓ $VOICE_DIR/piper/piper"
+  fi
 else
   echo "   Piper ya está."
 fi
 
 # --- 2. Voz es_ES-sharvard-medium (CC-BY-4.0) ---
+# Reusa get_voice.sh: descarga atómica de los DOS archivos (.onnx + .onnx.json); antes un corte
+# a mitad dejaba la voz rota para siempre (el re-run la saltaba por "ya existe").
 V="$VOICE_DIR/voices/es_ES-sharvard-medium"
-if [[ ! -f "$V.onnx" ]]; then
+if [[ ! -f "$V.onnx" || ! -f "$V.onnx.json" ]]; then
   say "Descargando voz es_ES-sharvard-medium…"
-  base="https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium"
-  curl -L --fail -o "$V.onnx"      "$base/es_ES-sharvard-medium.onnx"
-  curl -L --fail -o "$V.onnx.json" "$base/es_ES-sharvard-medium.onnx.json"
-  echo "   ✓ $V.onnx"
+  bash "$(dirname "${BASH_SOURCE[0]}")/../tools/get_voice.sh" es_ES-sharvard-medium
 else
   echo "   Voz ya está."
 fi

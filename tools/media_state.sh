@@ -21,6 +21,9 @@ _BROWSER='firefox|zen|chromium|chrome|brave|vivaldi|epiphany|librewolf|chrom'
 awj=$(hyprctl activewindow -j 2>/dev/null)
 acls=$(jq -r '.class // ""'      <<<"$awj" 2>/dev/null)
 afull=$(jq -r '.fullscreen // 0' <<<"$awj" 2>/dev/null)
+# Sin hyprctl (otro compositor) jq no emite nada y afull="" contaba como fullscreen:
+# todo navegador de fondo se clasificaba "watching". Vacío = no fullscreen.
+acls=${acls:-}; afull=${afull:-0}
 
 music_app=0; video_app=0; browser=0
 for ln in "${lines[@]}"; do

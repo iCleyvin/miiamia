@@ -17,9 +17,15 @@ Scope {
     property string baseEndpoint: "http://127.0.0.1:8080"     // llama-server local (de ai.toml)
     property string agentProvider: "local"                    // provider EFECTIVO (lo resuelve y pasa shell.qml)
     property string agentEndpoint: "http://127.0.0.1:9090"    // agent_daemon (cerebro)
-    readonly property bool _useDaemon: backend === "agent"
-    // ¿hace falta el motor local? embedded siempre; agent solo si el provider efectivo es local.
-    readonly property bool _useLocalEngine: backend === "embedded" || (backend === "agent" && agentProvider === "local")
+    // El daemon (cerebro) hace falta si ai.toml lo pide O si el provider efectivo no es local:
+    // nada en el repo escribe backend="agent" en ai.toml, así que un usuario que elige claude-cli/
+    // cloud en el menú se quedaba sin cerebro (health-poll a :8080 muerto). Derivarlo del provider
+    // lo arregla sin tocar ai.toml.
+    readonly property bool _useDaemon:
+        (backend === "agent" || agentProvider !== "local") && backend !== "ollama" && backend !== "external"
+    // ¿hace falta el motor local? solo si el provider efectivo es local (en modo daemon lo proxea).
+    readonly property bool _useLocalEngine:
+        (backend === "embedded" || backend === "agent") && agentProvider === "local"
     // Lo que ven ChatBubble/voice: el daemon (9090) en modo agent; llama-server directo en embedded.
     readonly property string endpoint: _useDaemon ? agentEndpoint : baseEndpoint
     property string modelPath: ""
@@ -102,8 +108,16 @@ Scope {
         id: agentd
         running: be._useDaemon
         command: ["python3", "-u", Quickshell.shellDir + "/../agent/agent_daemon.py"]
-        onRunningChanged: if (!running && be._useDaemon)
-            console.error("miiamia[ai]: el agent_daemon se cerró inesperadamente (revisa python/puerto 9090)")
+        onRunningChanged: if (!running && be._useDaemon) {
+            console.error("miiamia[ai]: el agent_daemon se cerró inesperadamente; reintento en 5s");
+            if (be.status === "ready" && be._useDaemon) be.status = "idle";   // que nadie hable a un puerto muerto
+            agentdRespawn.restart();
+        }
+    }
+    Timer {   // respawn con backoff: un daemon caído no puede dejar a la pet sin cerebro para siempre
+        id: agentdRespawn
+        interval: 5000
+        onTriggered: if (be._useDaemon && !agentd.running) agentd.running = true
     }
 
     // Arranque perezoso: llamar al abrir el chat / enviar un mensaje.
@@ -157,12 +171,18 @@ Scope {
         }
     }
 
-    // Apagar por inactividad.
+    // Apagar por inactividad. Aplica siempre que haya motor local (embedded O agent+local:
+    // antes solo embedded, y en modo agente llama-server quedaba cargado para siempre).
+    property bool chatOpen: false   // lo pone shell.qml; con el chat visible NO se apaga (input congelado si no)
     Timer {
         id: idleTimer
         interval: Math.max(1, be.idleUnloadSecs) * 1000
         running: false
-        onTriggered: if (be.idleUnloadSecs > 0 && be.embedded) be.shutdown()
+        onTriggered: {
+            if (be.idleUnloadSecs <= 0 || !be._useLocalEngine) return;
+            if (be.chatOpen) { idleTimer.restart(); return; }   // re-chequear luego, no congelar el chat
+            be.shutdown();
+        }
     }
 
     // Apagar al entrar en juego (liberar VRAM/RAM para el juego). Solo si hay motor local.
@@ -172,8 +192,13 @@ Scope {
 
     // Al cambiar el modelo personalizado: respawnea el motor con el modelo nuevo.
     onModelOverrideChanged: {
+        be._serverFailed = false;   // el modelo nuevo merece su propio intento (evita lockout)
         if (be.status === "ready" || be.status === "starting") shutdown();
-        if (be._useLocalEngine && be.modelOverride !== "" && be.status === "nomodel") be.status = "idle";
+        if (be._useLocalEngine) {
+            if (be.modelOverride !== "" && be.status === "nomodel") be.status = "idle";
+            // al VACIAR el custom sin modelo provisionado, volver a nomodel (no lanzar --model "")
+            else if (be.modelOverride === "" && (!be.downloaded || be.modelPath === "")) be.status = "nomodel";
+        }
     }
 
     // Si el provider EFECTIVO cambia a nube, el motor local ya no se usa -> apágalo (ahorra RAM/VRAM).

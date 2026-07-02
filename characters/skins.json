@@ -1,15 +1,15 @@
 [
   {
-    "id": "aka_live2d",
-    "label": "Aka — Live2D 🦊"
-  },
-  {
     "id": "dragon_inframundo",
     "label": "Averno — Dragón del Inframundo"
   },
   {
     "id": "dragon_inframundo_v2",
     "label": "Averno v2 — Dragón Vivo"
+  },
+  {
+    "id": "dragon_inframundo_v3",
+    "label": "Averno v3 — Rig Profesional"
   },
   {
     "id": "kira",
@@ -150,5 +150,9 @@
   {
     "id": "fenix_kawaii",
     "label": "Fenix ✨"
+  },
+  {
+    "id": "waifu_vivi",
+    "label": "Vivi — Waifu Anime 3D 🌸"
   }
 ]

@@ -556,13 +556,22 @@ def gen_skin(sk):
 
 def main():
     print(f"Generando {len(SKINS)} skins en {CHARS}")
-    index = []
+    # MERGE con el índice existente: este script solo "posee" las skins procedurales.
+    # Antes sobrescribía skins.json entero y borraba del menú las skins reales
+    # (dragón, kawaii, waifu 3D...) si alguien lo corría después de instalarlas.
+    index_path = CHARS / "skins.json"
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except Exception:
+        index = []
+    ids = {e.get("id") for e in index}
     for sk in SKINS:
         gen_skin(sk)
-        index.append({"id": sk["name"], "label": sk["label"]})
+        if sk["name"] not in ids:
+            index.append({"id": sk["name"], "label": sk["label"]})
         print(f"  ok {sk['name']}")
-    (CHARS / "skins.json").write_text(json.dumps(index, ensure_ascii=False, indent=2))
-    print(f"indice: {len(index)} skins -> {CHARS / 'skins.json'}")
+    index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2))
+    print(f"indice: {len(index)} skins -> {index_path}")
 
 
 if __name__ == "__main__":

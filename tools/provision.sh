@@ -40,6 +40,17 @@ REPO[full]="unsloth/Qwen3-4B-GGUF";     FILE[full]="Qwen3-4B-Q4_K_M.gguf";    CT
 free_ram_mb=$(awk '/MemAvailable/{printf "%.0f",$2/1024}' /proc/meminfo)
 vram_free_mb=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc '0-9')
 vram_free_mb=${vram_free_mb:-0}
+# AMD (amdgpu) expone la VRAM en /sys; antes solo se miraba nvidia-smi y una AMD con 16GB
+# de VRAM quedaba en tier bajo por decidirse solo con la RAM.
+if (( vram_free_mb == 0 )); then
+  for card in /sys/class/drm/card*/device; do
+    if [[ -r "$card/mem_info_vram_total" && -r "$card/mem_info_vram_used" ]]; then
+      t=$(<"$card/mem_info_vram_total"); u=$(<"$card/mem_info_vram_used")
+      vram_free_mb=$(( (t - u) / 1024 / 1024 ))
+      break
+    fi
+  done
+fi
 
 if [[ -n "$FORCE_TIER" ]]; then
   tier="$FORCE_TIER"
@@ -89,11 +100,23 @@ elif [[ -n "$exp_size" ]]; then
   echo "   ✓ tamaño OK (sin SHA disponible)"
 fi
 
-# --- Escribir ai.toml activo ---
-cat > "$AI_TOML" <<EOF
+# --- Escribir ai.toml activo (PRESERVANDO la config del cerebro del usuario) ---
+# Antes se regeneraba entero con backend="embedded" y external_* vacíos: "Re-detectar
+# hardware" desde el menú borraba el backend/API key que el usuario tuviera configurados.
+old_backend="embedded"; old_endpoint="http://127.0.0.1:8080"; old_ext_url=""; old_ext_key=""
+if [[ -f "$AI_TOML" ]]; then
+  _get() { sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*\"\{0,1\}\([^\"]*\)\"\{0,1\}.*/\1/p" "$AI_TOML" | head -1; }
+  v="$(_get backend)";          [[ -n "$v" ]] && old_backend="$v"
+  v="$(_get endpoint)";         [[ -n "$v" ]] && old_endpoint="$v"
+  v="$(_get external_url)";     [[ -n "$v" ]] && old_ext_url="$v"
+  v="$(_get external_api_key)"; [[ -n "$v" ]] && old_ext_key="$v"
+fi
+# Escritura atómica (tmp+mv): el FileView de la pet puede leerlo a mitad de escritura.
+tmp="$(mktemp "$CFG/.ai.toml.XXXXXX")"
+cat > "$tmp" <<EOF
 [ai]
-backend          = "embedded"
-endpoint         = "http://127.0.0.1:8080"
+backend          = "$old_backend"
+endpoint         = "$old_endpoint"
 model_tier       = "$tier"
 model_path       = "$dest"
 ctx_size         = ${CTX[$tier]}
@@ -103,9 +126,10 @@ sha256           = "${exp_sha:-}"
 idle_unload_secs = 180
 gaming_unload    = true
 reasoning        = "off"
-external_url     = ""
-external_api_key = ""
+external_url     = "$old_ext_url"
+external_api_key = "$old_ext_key"
 EOF
+mv "$tmp" "$AI_TOML"
 
 say "Listo."
 echo "   modelo: $dest"

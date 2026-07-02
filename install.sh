@@ -20,7 +20,11 @@ if [[ -f "$(dirname "${BASH_SOURCE[0]}")/shell/shell.qml" ]]; then
 else
   command -v git >/dev/null || { echo "Necesito git para clonar. Instálalo y reintenta."; exit 1; }
   say "Clonando miiamia en $DEST…"
-  [[ -d "$DEST/.git" ]] && git -C "$DEST" pull --ff-only || git clone --depth 1 "$REPO" "$DEST"
+  if [[ -d "$DEST/.git" ]]; then
+    git -C "$DEST" pull --ff-only || warn "No pude actualizar $DEST (¿historia divergente?); sigo con lo que hay."
+  else
+    git clone --depth 1 "$REPO" "$DEST"
+  fi
   SRC="$DEST"
 fi
 cd "$SRC"
@@ -33,7 +37,13 @@ command -v hyprctl >/dev/null || warn "No detecté Hyprland (hyprctl). La mascot
 # --- 2. Detectar gestor de paquetes ---
 PM=""
 for p in pacman apt-get dnf zypper xbps-install; do command -v "$p" >/dev/null && { PM="$p"; break; }; done
-SUDO=""; [[ $EUID -ne 0 ]] && SUDO="sudo"
+SUDO=""
+if [[ $EUID -ne 0 ]]; then
+  if command -v sudo >/dev/null; then SUDO="sudo"
+  elif command -v doas >/dev/null; then SUDO="doas"
+  else warn "Sin sudo/doas: no podré instalar paquetes del sistema (instálalos manualmente)."; PM=""
+  fi
+fi
 
 pm_install() { # instala paquetes (best-effort, no aborta si alguno falta)
   case "$PM" in
@@ -47,28 +57,35 @@ pm_install() { # instala paquetes (best-effort, no aborta si alguno falta)
 }
 
 say "Instalando dependencias (distro: ${PM:-desconocida})…"
+# curl: descargas de modelo/voz · grim+imagemagick: los "ojos" de la pet · ffmpeg: efectos de voz
+# qt6-quick3d: skins 3D (Model3DBackend / VRM); quickshell NO lo arrastra como dependencia.
 case "$PM" in
   pacman)
     # En Arch todo está en repos oficiales (sin AUR).
-    pm_install jq playerctl pipewire python qt6-declarative qt6-wayland espeak-ng \
-               quickshell whisper-cpp-vulkan
-    # Motor LLM por GPU (elige el que aplique; vulkan es vendor-neutral)
-    pm_install llama-cpp-vulkan || pm_install llama-cpp
+    pm_install jq playerctl pipewire python qt6-declarative qt6-wayland qt6-quick3d espeak-ng \
+               quickshell whisper-cpp-vulkan curl grim imagemagick ffmpeg
+    # Motor LLM por GPU (vulkan es vendor-neutral; sin fallback: "llama-cpp" a secas no existe)
+    pm_install llama-cpp-vulkan
     ;;
   apt-get)
-    pm_install jq playerctl pipewire-bin python3 espeak-ng \
-               qt6-declarative-dev qml6-module-qtquick qml6-module-qtquick-controls
+    pm_install jq playerctl pipewire-bin python3 espeak-ng curl grim imagemagick ffmpeg \
+               qt6-declarative-dev qml6-module-qtquick qml6-module-qtquick-controls \
+               qml6-module-qtquick3d
     ;;
   dnf)
-    pm_install jq playerctl pipewire-utils python3 espeak-ng qt6-qtdeclarative
+    pm_install jq playerctl pipewire-utils python3 espeak-ng curl grim ImageMagick ffmpeg-free \
+               qt6-qtdeclarative qt6-qtquick3d
     ;;
   zypper)
-    pm_install jq playerctl pipewire-tools python3 espeak-ng qt6-declarative
+    pm_install jq playerctl pipewire-tools python3 espeak-ng curl grim ImageMagick ffmpeg \
+               qt6-declarative qt6-quick3d-imports
     ;;
   xbps-install)
-    pm_install jq playerctl pipewire python3 espeak-ng qt6-declarative
+    pm_install jq playerctl pipewire python3 espeak-ng curl grim ImageMagick ffmpeg \
+               qt6-declarative qt6-quick3d
     ;;
 esac
+command -v curl >/dev/null || warn "Falta curl: las descargas de modelo/voz fallarán. Instálalo antes de seguir."
 
 # --- 3. Componentes no empaquetados fuera de Arch: guía clara, sin abortar ---
 command -v quickshell >/dev/null || warn \
@@ -100,8 +117,28 @@ fi
 say "Instalando el servicio…"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 mkdir -p "$UNIT_DIR"
-# Genera la unidad apuntando a la ruta real de instalación.
-sed "s|%h/miiamia/shell|$SRC/shell|" services/miiamia.service > "$UNIT_DIR/miiamia.service"
+# Genera la unidad con la ruta REAL del binario de quickshell (fuera de Arch suele quedar en
+# /usr/local/bin o ~/.local/bin: con /usr/bin hardcodeado la unidad moría en bucle 203/EXEC)
+# y la ruta real de instalación. Heredoc en vez de sed: rutas con '&' o '|' rompían el sed.
+QS_BIN="$(command -v quickshell || echo /usr/bin/quickshell)"
+cat > "$UNIT_DIR/miiamia.service" <<UNIT
+[Unit]
+Description=miiamia — overlay de mascota virtual (Quickshell sobre Hyprland)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=$QS_BIN -p $SRC/shell
+Restart=on-failure
+RestartSec=3
+# Mata todo el cgroup en stop (llama-server/whisper-server/pw-cat/piper hijos no quedan huérfanos).
+KillMode=control-group
+TimeoutStopSec=5
+
+[Install]
+WantedBy=graphical-session.target
+UNIT
 systemctl --user daemon-reload
 systemctl --user enable --now miiamia.service 2>/dev/null || \
   warn "No pude habilitar el servicio (¿sesión systemd --user?). Lánzalo a mano: quickshell -p $SRC/shell"

@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 from ultralytics import SAM
 
-CHARS = Path("/home/cleyvin/miiamia/characters")
+CHARS = Path(__file__).resolve().parents[2] / "characters"
 NECK = 0.54
 model = SAM("mobile_sam.pt")
 

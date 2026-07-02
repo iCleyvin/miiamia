@@ -22,6 +22,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -228,6 +229,18 @@ def web_search(query: str, n: int = 5) -> dict:
         return _err(f"búsqueda falló: {e}")
 
 
+class _SafeRedirects(urllib.request.HTTPRedirectHandler):
+    """Re-valida cada redirect contra _host_blocked: sin esto, una página pública podía
+    redirigir a http://127.0.0.1:8080 (o a la IP del router) y fetch_url la leía igual."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if _host_blocked(newurl):
+            raise urllib.error.URLError("redirect a dirección local/privada bloqueado")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_SAFE_OPENER = urllib.request.build_opener(_SafeRedirects())
+
+
 def fetch_url(url: str, max_chars: int = 2500) -> dict:
     """Descarga una página y devuelve su texto (sin HTML), recortado."""
     u = (url or "").strip()
@@ -237,7 +250,7 @@ def fetch_url(url: str, max_chars: int = 2500) -> dict:
         return _err("no leo direcciones locales/privadas")
     try:
         req = urllib.request.Request(u, headers={"User-Agent": UA})
-        with urllib.request.urlopen(req, timeout=12) as r:
+        with _SAFE_OPENER.open(req, timeout=12) as r:
             raw = r.read(400_000).decode("utf-8", "ignore")
         raw = re.sub(r"(?is)<(script|style|head|nav|footer).*?</\1>", " ", raw)
         text = html.unescape(re.sub(r"<[^>]+>", " ", raw))
