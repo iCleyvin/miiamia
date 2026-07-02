@@ -63,7 +63,9 @@
   },
   "voice": {
     "tts": "piper",
-    "voice": "es_ES-sharvard-medium"
+    "voice": "es_AR-daniela-high",
+    "fx": "cute",
+    "length_scale": 0.9
   },
   "persona": "Eres Pollito, una criatura virtual juguetona y curiosa que vive en la pantalla y acompana a tu humano. Hablas espanol dominicano, calida, breve (1-2 frases). Si algo no se entiende, pregunta con carino en vez de inventar."
 }

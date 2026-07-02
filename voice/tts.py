@@ -45,6 +45,16 @@ def _fx_filtergraph(name: str, sr: int):
             "aecho=0.9:0.55:22:0.16,"
             "volume=1.2,alimiter=limit=0.95[out]"
         ).format(sr=sr)
+    if name == "ghost":
+        # Voz ETÉREA (fantasmas/fénix): un toque más aguda y con "aire", eco largo y suave
+        # (presencia que flota), sin graves (los cuerpos etéreos no tienen pecho).
+        return (
+            "[0:a]asetrate={sr}*1.08,aresample={sr},atempo=0.9259[p];"
+            "[p]highpass=f=220,treble=g=5:f=5000,"
+            "chorus=0.5:0.9:50|60:0.3|0.25:0.3|0.28:1.5|1.2,"
+            "aecho=0.8:0.7:60|180:0.35|0.22,"
+            "volume=1.25,alimiter=limit=0.95[out]"
+        ).format(sr=sr)
     if name == "infernal":
         # Dragona infernal: tono -20% (grave pero aún femenino) + una capa a la octava de abajo
         # (rugido sobrenatural) + realce de graves + reverberación de caverna + grit suave.

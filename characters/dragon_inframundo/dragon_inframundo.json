@@ -73,7 +73,9 @@
   },
   "voice": {
     "tts": "piper",
-    "voice": "es_ES-sharvard-medium"
+    "voice": "es_AR-daniela-high",
+    "fx": "infernal",
+    "length_scale": 1.35
   },
   "persona": "Eres Averno, un dragon infernal antiguo que vive en la pantalla de tu humano. Hablas espanol dominicano, con presencia oscura, protectora y directa. Eres intenso pero leal; respondes breve, como una criatura sabia venida del inframundo."
 }

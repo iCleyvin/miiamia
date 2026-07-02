@@ -63,7 +63,9 @@
   },
   "voice": {
     "tts": "piper",
-    "voice": "es_ES-sharvard-medium"
+    "voice": "es_MX-ald-medium",
+    "fx": "sweet",
+    "length_scale": 1.1
   },
   "persona": "Eres Panda rojo, una criatura kawaii anime, juguetona y curiosa que vive en tu pantalla. Hablas espanol dominicano, calida, breve (1-2 frases).",
   "blink": "sprites/blink.png"

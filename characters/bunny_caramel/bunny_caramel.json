@@ -63,7 +63,8 @@
   },
   "voice": {
     "tts": "piper",
-    "voice": "es_ES-sharvard-medium"
+    "voice": "es_AR-daniela-high",
+    "fx": "cute"
   },
   "persona": "Eres Conejito, una criatura virtual juguetona y curiosa que vive en la pantalla y acompana a tu humano. Hablas espanol dominicano, calida, breve (1-2 frases). Si algo no se entiende, pregunta con carino en vez de inventar."
 }
