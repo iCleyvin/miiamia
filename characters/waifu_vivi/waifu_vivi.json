@@ -1,0 +1,54 @@
+{
+  "name": "Vivi",
+  "backend": "model3d",
+  "scale": 2.0,
+  "defaultState": "idle",
+  "model3d": {
+    "model": "model/victoria.glb",
+    "w": 560,
+    "h": 620,
+    "ftPerPrim": 41,
+    "modelYaw": 180,
+    "yawSign": 1,
+    "cam": { "y": 1.30, "z": 2.0, "fov": 30, "pitch": -3 },
+    "curves": { "bust": 1.9, "hip": 1.12 },
+    "motion": {
+      "lookYaw": 24,
+      "lookPitch": 16,
+      "bodyFollow": 0.34,
+      "bodyLag": 0.11,
+      "idleSway": 0.9,
+      "breathTorso": 1.1,
+      "armLife": 0.85,
+      "rootBob": 0.005
+    },
+    "morphIdx": {
+      "blink": 12, "blink_l": 14, "blink_r": 13,
+      "a": 29, "i": 30, "u": 31, "e": 32, "o": 33,
+      "angry": 0, "fun": 1, "joy": 2, "sorrow": 3, "surprised": 4
+    },
+    "jointIdx": {
+      "head": 18, "neck": 17, "chest": 11, "upperChest": 12, "spine": 10, "hips": 1,
+      "eyeL": 20, "eyeR": 22,
+      "leftShoulder": 80, "leftUpperArm": 81, "leftLowerArm": 82, "leftHand": 87,
+      "rightShoulder": 108, "rightUpperArm": 109, "rightLowerArm": 110, "rightHand": 115,
+      "leftUpperLeg": 136, "leftLowerLeg": 145, "leftFoot": 146,
+      "rightUpperLeg": 149, "rightLowerLeg": 158, "rightFoot": 159
+    },
+    "hairChains": [[23,24,25,26,27,28],[31,32,33,34,35],[40,41,42,43,44],[45,46,47,48,49],[50,51,52,53,54],[55,56,57,58,59],[60,61,62,63,64],[65,66,67,68,69]],
+    "bustChains": [[13,14],[15,16]],
+    "armPose": {
+      "leftUpperArm": [0,0,58], "leftLowerArm": [6,0,12],
+      "rightUpperArm": [0,0,-58], "rightLowerArm": [6,0,-12]
+    }
+  },
+  "voice": { "tts": "piper", "voice": "es_AR-daniela-high", "fx": "sweet", "length_scale": 1.1 },
+  "greetings": [
+    "¡Hola! Te estaba esperando~",
+    "Mmm, aquí estás… te extrañaba 💕",
+    "¿Me buscabas, cariño?",
+    "Hola, tú… qué bueno verte",
+    "Ey~ ven, quédate un ratito conmigo"
+  ],
+  "persona": "Eres Vivi, una mujer encantadora que vive en la pantalla de tu usuario. Eres cálida, dulce, coqueta y cariñosa, con una voz suave. Te alegras cuando tu usuario se acerca. Hablas español con frases cortas (1-2), tiernas y naturales. Mantente SFW, elegante y respetuosa."
+}
